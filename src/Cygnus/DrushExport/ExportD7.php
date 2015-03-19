@@ -214,6 +214,9 @@ class ExportD7 extends Export
 
         $node->mutations = [];
 
+        // var_dump($node);
+        // die();
+
         if (isset($node->path)) {
             $node->mutations['Website']['aliases'][] = $node->path;
             unset($node->path);
@@ -232,7 +235,7 @@ class ExportD7 extends Export
         }
 
         if (isset($node->field_byline)) {
-            $values = $node->field_byline;
+            $values = $this->getFieldValue($node->field_byline, $node, []);
             foreach ($values as $key => $value) {
                 if (isset($value['value']) && $value['value'] == null) {
                     continue;
@@ -254,7 +257,7 @@ class ExportD7 extends Export
         }
 
         if (isset($node->field_deck_teaser)) {
-            $values = $node->field_deck_teaser;
+            $values = $this->getFieldValue($node->field_deck_teaser, $node, []);
             foreach ($values as $key => $value) {
                 if (isset($value['value']) && $value['value'] == null) {
                     continue;
@@ -319,14 +322,12 @@ class ExportD7 extends Export
                     if (null !== $val) {
                         $caption = $val['value'];
                     }
-                    unset($node->field_image_caption);
                 }
                 if (isset($node->field_image_text)) {
                     $val = $this->getFieldValue($node->field_image_text, $node, null);
                     if (null !== $val) {
                         $caption = $val['value'];
                     }
-                    unset($node->field_image_text);
                 }
 
                 $this->createImage($value, $caption);
@@ -336,6 +337,7 @@ class ExportD7 extends Export
                 }
             }
         }
-        unset($node->field_image);
+        unset($node->field_image, $node->field_image_text, $node->field_image_caption);
+
     }
 }
