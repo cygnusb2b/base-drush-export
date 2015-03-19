@@ -108,4 +108,234 @@ class ExportD7 extends Export
         // $this->writeln(sprintf('DEBUG: `%s` with `%s` returned %s results.', $query, $types, count($nodes)));
         return $nodes;
     }
+
+    /**
+     * {@inheritdoc}
+     */
+    protected function getFieldValue($field, $node, $return = null)
+    {
+        if (null === $field || empty($field)) {
+            return $return;
+        }
+        if (isset($field[$node->language])) {
+            return $this->getFieldValue($field[$node->language], $node, $return);
+        }
+        if (isset($field['und'])) {
+            return $this->getFieldValue($field['und'], $node, $return);
+        }
+        return $field;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    protected function convertTaxonomy(&$node)
+    {
+        $taxonomy = [];
+        unset($node->taxonomy);
+
+        if (isset($node->field_tags)) {
+            $terms = $this->getFieldValue($node->field_tags, $node, []);
+            foreach ($terms as $tax) {
+                $this->addTerm($taxonomy, $tax['tid']);
+            }
+            unset($node->field_tags);
+        }
+
+        // Handle tagging/primary tag/primary section nonsense
+        if (isset($node->field_special_focus)) {
+            $terms = $this->getFieldValue($node->field_special_focus, $node, []);
+            foreach ($terms as $tax) {
+                $this->addTerm($taxonomy, $tax['tid']);
+            }
+            unset($node->field_special_focus);
+        }
+
+        if (isset($node->field_focus_sections)) {
+            $terms = $this->getFieldValue($node->field_focus_sections, $node, []);
+            foreach ($terms as $tax) {
+                $this->addTerm($taxonomy, $tax['tid']);
+            }
+            unset($node->field_focus_sections);
+        }
+
+        if (isset($node->field_section)) {
+            $terms = $this->getFieldValue($node->field_section, $node, []);
+            foreach ($terms as $tax) {
+                $this->addTerm($taxonomy, $tax['tid']);
+            }
+            unset($node->field_section);
+        }
+
+        if (!empty($taxonomy)) {
+            $node->taxonomy = $taxonomy;
+        }
+    }
+
+    protected function addTerm(&$taxonomy, $tid)
+    {
+        $tax = taxonomy_term_load($tid);
+        $v = taxonomy_vocabulary_load($tax->vid);
+
+        if (null !== ($type = (isset($this->map['Taxonomy'][$v->name])) ? $this->map['Taxonomy'][$v->name] : null)) {
+            $type = str_replace('Taxonomy\\', '', $type);
+            $taxonomy[] = [
+                'id'    => (int) $tid,
+                'type'  => $type
+            ];
+        }
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    protected function convertFields(&$node)
+    {
+        $nid = (int) $node->nid;
+
+        $node->_id = $nid;
+        unset($node->nid);
+
+        $node->type = str_replace('Website\\Content\\', '', $this->map['Content'][$node->type]);
+
+        $node->name = $node->title;
+        unset($node->title);
+
+        $node->status = (int) $node->status;
+
+        $node->createdBy = $node->updatedBy = (int) $node->uid;
+        unset($node->uid);
+
+        $node->created = (int) $node->created;
+        $node->published = $node->updated = (int) $node->changed;
+        unset($node->changed);
+
+        unset($node->rdf_mapping, $node->cid, $node->last_comment_uid, $node->metatags, $node->field_legacy_article_id);
+
+        $node->mutations = [];
+
+        if (isset($node->path)) {
+            $node->mutations['Website']['aliases'][] = $node->path;
+            unset($node->path);
+        }
+
+        $body = $this->getFieldValue($node->body, $node, []);
+        if (count($body) === 1) {
+            $body = reset($body);
+        }
+        unset($node->body);
+        if (isset($body['value'])) {
+            $node->body = $body['value'];
+        }
+        if (isset($body['summary'])) {
+            $node->teaser = $body['summary'];
+        }
+
+        if (isset($node->field_byline)) {
+            $values = $node->field_byline;
+            foreach ($values as $key => $value) {
+                if (isset($value['value']) && $value['value'] == null) {
+                    continue;
+                }
+                $node->byline = $value['value'];
+            }
+            unset($node->field_byline);
+        }
+
+        if (isset($node->field_deck)) {
+            $values = $node->field_deck;
+            foreach ($values as $key => $value) {
+                if (isset($value['value']) && $value['value'] == null) {
+                    continue;
+                }
+                $node->mutations['Magazine']['deck'] = $value['value'];
+            }
+            unset($node->field_deck);
+        }
+
+        if (isset($node->field_deck_teaser)) {
+            $values = $node->field_deck_teaser;
+            foreach ($values as $key => $value) {
+                if (isset($value['value']) && $value['value'] == null) {
+                    continue;
+                }
+                $node->mutations['Magazine']['deck'] = $value['value'];
+            }
+            unset($node->field_deck_teaser);
+        }
+
+        if (isset($node->field_special_focus)) {
+            foreach ($node->field_special_focus as $link) {
+                if (array_key_exists('value', $link) && null == $link['value']) {
+                    continue;
+                }
+
+                $node->specialFocus = $link['value'];
+                break;
+            }
+        }
+        unset($node->field_special_focus);
+
+        $this->convertFeedData($node);
+        $this->buildRelationships($node);
+        $this->removeCrapFields($node);
+
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    protected function buildRelationships(&$node)
+    {
+        // Handle 'picture' field
+        if (!empty($node->picture)) {
+            var_dump($node->picture);
+            die();
+        }
+        unset($node->picture);
+
+        // Handle 'files' field
+        if (!empty($node->files)) {
+            var_dump($node->files);
+            die();
+        }
+        unset($node->files);
+
+        if (isset($node->field_image)) {
+            $images = $this->getFieldValue($node->field_image, $node, []);
+            foreach ($images as $value) {
+                if (0 === (int) $value['fid']) {
+                    continue;
+                }
+                $ref = [
+                    'id'    => (int) $value['fid'],
+                    'type'  => 'Image'
+                ];
+                $node->relatedMedia[] = $ref;
+
+                $caption = null;
+                if (isset($node->field_image_caption)) {
+                    $val = $this->getFieldValue($node->field_image_caption, $node, null);
+                    if (null !== $val) {
+                        $caption = $val['value'];
+                    }
+                    unset($node->field_image_caption);
+                }
+                if (isset($node->field_image_text)) {
+                    $val = $this->getFieldValue($node->field_image_text, $node, null);
+                    if (null !== $val) {
+                        $caption = $val['value'];
+                    }
+                    unset($node->field_image_text);
+                }
+
+                $this->createImage($value, $caption);
+
+                if (!isset($node->primaryImage)) {
+                    $node->primaryImage = $ref['id'];
+                }
+            }
+        }
+        unset($node->field_image);
+    }
 }

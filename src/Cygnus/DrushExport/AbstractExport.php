@@ -170,51 +170,73 @@ abstract class Export
     /**
      * Returns loaded resource objects.
      *
-     * @param mixed     $resource   A database resource for Drupal DBAL
-     * @param string    $type       type of object to load
+     * @param   mixed   $resource   A database resource for Drupal DBAL
+     * @param   string  $type       type of object to load
      *
-     * @return array    An array of StdClass objects.
+     * @return  array   An array of StdClass objects.
      */
     abstract protected function getObjects($resource, $type = 'node');
 
     /**
      * Returns raw resource results.
      *
-     * @param mixed     $resource   A database resource for Drupal DBAL
+     * @param   mixed   $resource   A database resource for Drupal DBAL
      *
-     * @return array    An array of StdClass objects.
+     * @return  array   An array of StdClass objects.
      */
     abstract protected function getRaw($resource);
 
     /**
      * Formats generic array data for PDO IN(?) query
      *
-     * @param array     $values   A database resource for Drupal DBAL
+     * @param   array   $values     A database resource for Drupal DBAL
      *
-     * @return array|string Formatted values for PDO query
+     * @return  array|string Formatted values for PDO query
      */
     abstract protected function formatValues(array $values = []);
 
     /**
      * Returns a count of available nodes based on passed types.
      *
-     * @param array     $types   Types to use in query
+     * @param   array   $types      Types to use in query
      *
-     * @return int
+     * @return  int
      */
     abstract protected function countNodes(array $types = []);
 
     /**
      * Pages through nodes based on types, limit, skip.
      *
-     * @param array     $types   Types to use in query
-     * @param int       $limit   # results to return
-     * @param int       $skip    # results to start from
+     * @param   array   $types      Types to use in query
+     * @param   int     $limit      # results to return
+     * @param   int     $skip       # results to start from
      *
-     * @return int
+     * @return  int
      */
     abstract protected function queryNodes(array $types = [], $limit = 100, $skip = 0);
 
+    /**
+     * Retrieves value for languaged or multi-valued fields.
+     *
+     * @param   mixed   $field      The field to retrieve
+     * @param   object  $node       The node
+     * @param   mixed   $return     Value to return if field has no value.
+     *
+     * @return  mixed   Value or $return
+     */
+    protected function getFieldValue($field, $node, $return = null)
+    {
+        if (null === $field || empty($field)) {
+            return $return;
+        }
+        if (isset($field[$node->language])) {
+            return $this->getFieldValue($field[$node->language], $node, $return);
+        }
+        if (isset($field['und'])) {
+            return $this->getFieldValue($field['und'], $node, $return);
+        }
+        return $field;
+    }
 
     protected function loadUsers()
     {
@@ -301,70 +323,69 @@ abstract class Export
     protected function convertFields(&$node)
     {
         $nid = (int) $node->nid;
-        if (null !== ($type = (isset($this->map['Content'][$node->type])) ? $this->map['Content'][$node->type] : null)) {
-            $node->_id = $nid;
-            unset($node->nid);
-            unset($node->type);
-            $node->type = str_replace('Website\\Content\\', '', $type);
 
-            $node->name = $node->title;
-            unset($node->title);
+        $node->_id = $nid;
+        unset($node->nid);
+        unset($node->type);
+        $node->type = str_replace('Website\\Content\\', '', $type);
 
-            $node->status = (int) $node->status;
+        $node->name = $node->title;
+        unset($node->title);
 
-            $node->createdBy = $node->updatedBy = (int) $node->uid;
-            unset($node->uid);
+        $node->status = (int) $node->status;
 
-            $node->created = (int) $node->created;
-            $node->published = $node->updated = (int) $node->changed;
-            unset($node->changed);
+        $node->createdBy = $node->updatedBy = (int) $node->uid;
+        unset($node->uid);
 
-            $node->mutations = [];
+        $node->created = (int) $node->created;
+        $node->published = $node->updated = (int) $node->changed;
+        unset($node->changed);
 
-            if (isset($node->path)) {
-                $node->mutations['Website']['aliases'][] = $node->path;
-                unset($node->path);
-            }
+        $node->mutations = [];
 
-            if (isset($node->field_byline)) {
-                $values = $node->field_byline;
-                foreach ($values as $key => $value) {
-                    if (isset($value['value']) && $value['value'] == null) {
-                        continue;
-                    }
-                    $node->byline = $value['value'];
-                }
-                unset($node->field_byline);
-            }
-
-            if (isset($node->field_deck)) {
-                $values = $node->field_deck;
-                foreach ($values as $key => $value) {
-                    if (isset($value['value']) && $value['value'] == null) {
-                        continue;
-                    }
-                    $node->mutations['Magazine']['deck'] = $value['value'];
-                }
-                unset($node->field_deck);
-            }
-
-            if (isset($node->field_special_focus)) {
-                foreach ($node->field_special_focus as $link) {
-                    if (array_key_exists('value', $link) && null == $link['value']) {
-                        continue;
-                    }
-
-                    $node->specialFocus = $link['value'];
-                    break;
-                }
-            }
-            unset($node->field_special_focus);
-
-            $this->convertFeedData($node);
-            $this->buildRelationships($node);
-            $this->removeCrapFields($node);
-
+        if (isset($node->path)) {
+            $node->mutations['Website']['aliases'][] = $node->path;
+            unset($node->path);
         }
+
+        if (isset($node->field_byline)) {
+            $values = $node->field_byline;
+            foreach ($values as $key => $value) {
+                if (isset($value['value']) && $value['value'] == null) {
+                    continue;
+                }
+                $node->byline = $value['value'];
+            }
+            unset($node->field_byline);
+        }
+
+        if (isset($node->field_deck)) {
+            $values = $node->field_deck;
+            foreach ($values as $key => $value) {
+                if (isset($value['value']) && $value['value'] == null) {
+                    continue;
+                }
+                $node->mutations['Magazine']['deck'] = $value['value'];
+            }
+            unset($node->field_deck);
+        }
+
+        if (isset($node->field_special_focus)) {
+            foreach ($node->field_special_focus as $link) {
+                if (array_key_exists('value', $link) && null == $link['value']) {
+                    continue;
+                }
+
+                $node->specialFocus = $link['value'];
+                break;
+            }
+        }
+        unset($node->field_special_focus);
+
+        $this->convertFeedData($node);
+        $this->buildRelationships($node);
+        $this->removeCrapFields($node);
+
     }
 
     protected function convertFeedData(&$node)
@@ -400,6 +421,9 @@ abstract class Export
                 if (isset($value['value']) && $value['value'] == null) {
                     continue;
                 }
+                if (0 === (int) $value['fid']) {
+                    continue;
+                }
                 $ref = [
                     'id'    => (int) $value['fid'],
                     'type'  => 'Image'
@@ -432,7 +456,7 @@ abstract class Export
         $kv = [
             '_id'       => (int) $img['fid'],
             'fileName'  => $img['filename'],
-            'filePath'  => $img['filepath'],
+            'filePath'  => (isset($img['uri'])) ? $img['uri'] : $img['filepath'],
             'createdBy' => (int) $img['uid'],
             'created'   => date('c', $img['timestamp']),
             'type'      => 'Image'
@@ -610,11 +634,12 @@ abstract class Export
                     continue;
                 }
 
-                $this->convertTaxonomy($node);
-                $this->convertScheduling($node);
-                $this->convertFields($node);
-
-                $formatted[] = json_decode(json_encode($node), true);
+                if (null !== ($type = (isset($this->map['Content'][$node->type])) ? $this->map['Content'][$node->type] : null)) {
+                    $this->convertTaxonomy($node);
+                    $this->convertScheduling($node);
+                    $this->convertFields($node);
+                    $formatted[] = json_decode(json_encode($node), true);
+                }
             }
 
             $inserted += count($formatted);
