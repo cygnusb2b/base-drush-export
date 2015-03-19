@@ -326,8 +326,8 @@ abstract class Export
 
         $node->_id = $nid;
         unset($node->nid);
-        unset($node->type);
-        $node->type = str_replace('Website\\Content\\', '', $type);
+
+        $node->type = str_replace('Website\\Content\\', '', $this->map['Content'][$node->type]);
 
         $node->name = $node->title;
         unset($node->title);
