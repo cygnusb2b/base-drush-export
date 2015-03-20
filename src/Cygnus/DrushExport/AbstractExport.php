@@ -238,6 +238,24 @@ abstract class Export
         return $field;
     }
 
+    protected function generateLegacyUri($node)
+    {
+        $remove = ['a', 'an', 'as', 'at', 'before', 'but', 'by', 'for', 'from', 'is', 'in', 'into', 'like', 'of', 'off', 'on', 'onto', 'per', 'since', 'than', 'the', 'this', 'that', 'to', 'up', 'via', 'with'];
+        $uri = sprintf('content/%s', strtolower(preg_replace("![^a-z0-9]+!i", "-", $node->name)));
+
+        foreach ($remove as $token) {
+            $uri = str_replace(sprintf('-%s', $token), '', $uri);
+        }
+
+        $uri = str_replace('--', '-', $uri);
+
+        if (strlen($uri) > 100) {
+            $uri = substr($uri, 0, 100);
+        }
+
+        return $uri;
+    }
+
     protected function loadUsers()
     {
         $resource = db_query('select uid from {users} order by uid asc');
@@ -342,6 +360,8 @@ abstract class Export
         unset($node->changed);
 
         $node->mutations = [];
+
+        $node->mutations['Website']['aliases'][] = $this->generateLegacyUri($node);
 
         if (isset($node->path)) {
             $node->mutations['Website']['aliases'][] = $node->path;

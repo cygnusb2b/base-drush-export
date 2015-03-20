@@ -2,6 +2,9 @@
 
 namespace Cygnus\DrushExport;
 
+use DateTimeZone;
+use DateTime;
+
 /**
  * Provides support for exporting from Drupal 7
  */
@@ -15,9 +18,46 @@ class ExportD7 extends Export
             'database'          => 'import_mni_arkansas'
         ],
         'easttn'        => [
+            'Taxonomy'  => [
+                'Focus Sections'    => 'Taxonomy\\Category',
+                'Tags'              => 'Taxonomy\\Tag',
+                'Section'           => 'Taxonomy\\Section',
+            ],
+            'Content'   => [
+                'story'         => 'Website\\Content\\Article',
+                'event'         => 'Website\\Content\\Event',
+                'feed_item'     => 'Website\\Content\\News',
+                // 'feed'          => 'Website\\Content\\News',
+            ],
+            'Section'   => [
+                'page'          => 'Website\\Section',
+            ],
+            'Issue'     => [
+                'issue'         => 'Magazine\\Issue',
+                'manatee_issue' => 'Magazine\\Issue',
+            ],
             'database'          => 'import_mni_easttn'
         ],
         'mississippi'   => [
+            'Taxonomy'  => [
+                'Focus Sections'    => 'Taxonomy\\Category',
+                'Tags'              => 'Taxonomy\\Tag',
+                'Section'           => 'Taxonomy\\Section',
+            ],
+            'Content'   => [
+                'story'         => 'Website\\Content\\Article',
+                'manatee_story' => 'Website\\Content\\Article',
+                'feed_content'  => 'Website\\Content\\News',
+                'feed_item'     => 'Website\\Content\\News',
+                // 'feed'          => 'Website\\Content\\News',
+            ],
+            'Section'   => [
+                'page'          => 'Website\\Section',
+            ],
+            'Issue'     => [
+                'issue'         => 'Magazine\\Issue',
+                'manatee_issue' => 'Magazine\\Issue',
+            ],
             'database'          => 'import_mni_mississippi'
         ],
         'orlando'       => [
@@ -30,6 +70,7 @@ class ExportD7 extends Export
                 'story'         => 'Website\\Content\\Article',
                 'manatee_story' => 'Website\\Content\\Article',
                 'feed_content'  => 'Website\\Content\\News',
+                'feed_item'     => 'Website\\Content\\News',
                 // 'feed'          => 'Website\\Content\\News',
             ],
             'Section'   => [
@@ -217,6 +258,24 @@ class ExportD7 extends Export
         // var_dump($node);
         // die();
 
+        // Dates conversion for events.
+        if (isset($node->field_event_date)) {
+            $date = $this->getFieldValue($node->field_event_date, $node, []);
+            $tz = (isset($date['timezone'])) ? $date['timezone'] : 'America/Chicago';
+            $tz = new DateTimeZone($tz);
+            $startDate = (isset($date['value'])) ? new DateTime(date('c', strtotime($date['value'])), $tz) : null;
+            if (null !== $startDate) {
+                $node->startDate = $startDate;
+            }
+            $endDate = (isset($date['value2'])) ? new DateTime(date('c', strtotime($date['value2'])), $tz) : null;
+            if (null !== $endDate) {
+                $node->endDate = $endDate;
+            }
+            unset($node->field_event_date);
+        }
+
+        $node->mutations['Website']['aliases'][] = $this->generateLegacyUri($node);
+
         if (isset($node->path)) {
             $node->mutations['Website']['aliases'][] = $node->path;
             unset($node->path);
@@ -232,6 +291,17 @@ class ExportD7 extends Export
         }
         if (isset($body['summary'])) {
             $node->teaser = $body['summary'];
+        }
+
+        if (isset($node->field_feed_item_description)) {
+            if (empty($node->body)) {
+                $description = $this->getFieldValue($node->field_feed_item_description, $node, []);
+                if (!isset($description['value'])) {
+                    $description = array_shift($description);
+                }
+                $node->body = $description['value'];
+            }
+            unset($node->field_feed_item_description);
         }
 
         if (isset($node->field_byline)) {
