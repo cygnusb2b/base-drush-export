@@ -15,6 +15,24 @@ class ExportD7 extends Export
      */
     protected $configs = [
         'arkansas'      => [
+            'Taxonomy'  => [
+                'Focus Sections'    => 'Taxonomy\\Category',
+                'Tags'              => 'Taxonomy\\Tag',
+                'Section'           => 'Taxonomy\\Section',
+            ],
+            'Content'   => [
+                'story'         => 'Website\\Content\\Article',
+                'event'         => 'Website\\Content\\Event',
+                'feed_item'     => 'Website\\Content\\News',
+                // 'feed'          => 'Website\\Content\\News',
+            ],
+            'Section'   => [
+                'page'          => 'Website\\Section',
+            ],
+            'Issue'     => [
+                'issue'         => 'Magazine\\Issue',
+                'manatee_issue' => 'Magazine\\Issue',
+            ],
             'database'          => 'import_mni_arkansas'
         ],
         'easttn'        => [
