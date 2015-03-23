@@ -238,6 +238,19 @@ abstract class Export
         return $field;
     }
 
+    /**
+     * Creates an imported image with new paths from legacy documents.
+     *
+     * @param   array   $img        The image data
+     * @param   string  $caption    The image caption, if available.
+     */
+    abstract protected function createImage(array $img, $caption = null);
+
+    final protected function getHost()
+    {
+        return $this->map['host'];
+    }
+
     protected function generateLegacyUri($node)
     {
         $remove = ['a', 'an', 'as', 'at', 'before', 'but', 'by', 'for', 'from', 'is', 'in', 'into', 'like', 'of', 'off', 'on', 'onto', 'per', 'since', 'than', 'the', 'this', 'that', 'to', 'up', 'via', 'with'];
@@ -465,26 +478,6 @@ abstract class Export
             }
         }
         unset($node->field_image);
-    }
-
-    protected function createImage(array $img, $caption = null)
-    {
-        if ((int) $img['fid'] === 0) {
-            return;
-        }
-        $collection = $this->database->selectCollection('Image');
-        $kv = [
-            '_id'       => (int) $img['fid'],
-            'fileName'  => $img['filename'],
-            'filePath'  => (isset($img['uri'])) ? $img['uri'] : $img['filepath'],
-            'createdBy' => (int) $img['uid'],
-            'created'   => date('c', $img['timestamp']),
-            'type'      => 'Image'
-        ];
-        if (null !== $caption) {
-            $kv['caption'] = $caption;
-        }
-        $collection->insert($kv);
     }
 
     protected function removeCrapFields(&$node)

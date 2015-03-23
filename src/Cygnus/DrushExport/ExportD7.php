@@ -410,4 +410,30 @@ class ExportD7 extends Export
         unset($node->field_image, $node->field_image_text, $node->field_image_caption);
 
     }
+
+    /**
+     * {@inheritdoc}
+     */
+    protected function createImage(array $img, $caption = null)
+    {
+        if ((int) $img['fid'] === 0) {
+            return;
+        }
+
+        $filePath = file_create_url($img['uri']);
+
+        $collection = $this->database->selectCollection('Image');
+        $kv = [
+            '_id'       => (int) $img['fid'],
+            'fileName'  => $img['filename'],
+            'filePath'  => $filePath,
+            'createdBy' => (int) $img['uid'],
+            'created'   => date('c', $img['timestamp']),
+            'type'      => 'Image'
+        ];
+        if (null !== $caption) {
+            $kv['caption'] = $caption;
+        }
+        $collection->insert($kv);
+    }
 }

@@ -33,7 +33,8 @@ class ExportD6 extends Export
                 'manatee_issue' => 'Magazine\\Issue',
             ],
             'publication'       => 'stlouis',
-            'database'          => 'import_mni_stlouis'
+            'database'          => 'import_mni_stlouis',
+            'host'              => 'saintlouismedicalnews.com'
         ],
         'tampabay'      => [
             'Taxonomy'  => [
@@ -56,7 +57,8 @@ class ExportD6 extends Export
                 'issue'         => 'Magazine\\Issue',
                 'manatee_issue' => 'Magazine\\Issue',
             ],
-            'database'          => 'import_mni_tampabay'
+            'database'          => 'import_mni_tampabay',
+            'host'              => 'tampabaymedicalnews.com'
         ]
     ];
 
@@ -143,5 +145,31 @@ class ExportD6 extends Export
         $nodes = $this->getObjects($resource, 'node');
         // $this->writeln(sprintf('DEBUG: `%s` with `%s` returned %s results.', $query, $types, count($nodes)));
         return $nodes;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    protected function createImage(array $img, $caption = null)
+    {
+        if ((int) $img['fid'] === 0) {
+            return;
+        }
+
+        $filePath = sprintf('http://%s/%s', $this->getHost(), $img['filepath']);
+
+        $collection = $this->database->selectCollection('Image');
+        $kv = [
+            '_id'       => (int) $img['fid'],
+            'fileName'  => $img['filename'],
+            'filePath'  => $filePath,
+            'createdBy' => (int) $img['uid'],
+            'created'   => date('c', $img['timestamp']),
+            'type'      => 'Image'
+        ];
+        if (null !== $caption) {
+            $kv['caption'] = $caption;
+        }
+        $collection->insert($kv);
     }
 }
