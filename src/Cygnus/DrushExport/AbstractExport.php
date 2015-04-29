@@ -461,7 +461,7 @@ abstract class Export
                     'id'    => (int) $value['fid'],
                     'type'  => 'Image'
                 ];
-                $node->relatedMedia[] = $ref;
+                $node->images[] = $ref;
 
                 $caption = null;
                 if (isset($node->field_image_caption)) {
