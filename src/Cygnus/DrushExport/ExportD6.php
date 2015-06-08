@@ -59,7 +59,30 @@ class ExportD6 extends Export
             ],
             'database'          => 'import_mni_tampabay',
             'host'              => 'tampabaymedicalnews.com'
+        ],
+        'nashvillepost'      => [
+            'Taxonomy'  => [
+                'Companies'         => 'Taxonomy\\Organization', // no company, use organization or override?
+                'County'            => 'Taxonomy\\Region'  // Location data but much more specific than locations data - use in region or put into Location with other data?
+                'Locations'         => 'Taxonomy\\Location',
+                'Main'              => 'Taxonomy\\Category', // category or topic?
+                'People'            => 'Taxonomy\\Person',
+                'Subjects'          => 'Taxonomy\\Tag',  // topic or tag?
+                'Tags'              => 'Taxonomy\\Tag'
+            ],
+            'Content'   => [
+                'article'       => 'Website\\Content\\Article',
+                'blog'          => 'Website\\Content\\Blog',
+                'gallery'       => 'Website\\Content\\MediaGallery',
+                'need_to_know'  => 'Website\\Content\\Article',
+            ],
+            'Section'   => [
+                'callout'          => 'Website\\Section',
+            ],
+            'database'          => 'import_nvp',
+            'host'              => 'nashvillepost.com'
         ]
+
     ];
 
     /**
