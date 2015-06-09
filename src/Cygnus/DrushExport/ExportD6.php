@@ -63,7 +63,7 @@ class ExportD6 extends Export
         'nashvillepost'      => [
             'Taxonomy'  => [
                 'Companies'         => 'Taxonomy\\Organization', // no company, use organization or override?
-                'County'            => 'Taxonomy\\Region'  // Location data but much more specific than locations data - use in region or put into Location with other data?
+                'County'            => 'Taxonomy\\Region',  // Location data but much more specific than locations data - use in region or put into Location with other data?
                 'Locations'         => 'Taxonomy\\Location',
                 'Main'              => 'Taxonomy\\Category', // category or topic?
                 'People'            => 'Taxonomy\\Person',
