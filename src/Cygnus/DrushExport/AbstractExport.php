@@ -12,6 +12,11 @@ use DateTime;
  */
 abstract class Export
 {
+
+    // @jp - tmp to debug a specific node on new data sets
+    public $debugNode = false;
+    public $debugNodeId = -1;
+
     /**
      * @var array
      * The currently active import configuration.
@@ -68,8 +73,8 @@ abstract class Export
     {
         $this->writeln(sprintf('Starting import for %s', $this->key), true, true);
 
-        $this->importUsers();
-        $this->importTaxonomies();
+        $this->importUsers(); 
+        $this->importTaxonomies(); 
         $this->importNodes();
 
         $this->writeln('Import complete.', true, true);
@@ -161,8 +166,8 @@ abstract class Export
     {
         $this->writeln('Importing Nodes.', false, true);
 
-        $this->importWebsiteSectionNodes();
-        $this->importMagazineIssueNodes();
+        $this->importWebsiteSectionNodes(); 
+        $this->importMagazineIssueNodes(); 
         $this->importContentNodes();
 
     }
@@ -434,6 +439,7 @@ abstract class Export
 
     protected function buildRelationships(&$node)
     {
+
         // Handle 'picture' field
         if (!empty($node->picture)) {
             var_dump($node->picture);
@@ -443,12 +449,40 @@ abstract class Export
 
         // Handle 'files' field
         if (!empty($node->files)) {
-            var_dump($node->files);
-            die();
+
+            $files =  $node->files;
+            foreach ($files AS $fid => $file) {
+
+                $file = (array) $file;
+
+                // had for image, necessary for file?
+                if (isset($file['filepath']) && $file['filepath'] == null) {
+                    continue;
+                }
+                if (0 === (int) $file['fid']) {
+                    continue;
+                }
+
+                // record the file id so we can reassocaite the document with the content object in base
+                $ref = [
+                    'id'    => (int) $file['fid'],
+                    'type'  => 'File'
+                ];
+                // title 'document', 'file', 'attachment' - mainly pdf, etc
+                $node->documents[] = $ref;
+
+                $this->createDocument($file);
+            }
+
         }
         unset($node->files);
 
+        // looks like files are also in the field_image field?
         if (isset($node->field_image)) {
+
+            if ($this->debugNode) {
+                var_dump($node->field_image);
+            }
             $images = $node->field_image;
             foreach ($images as $key => $value) {
                 if (isset($value['value']) && $value['value'] == null) {
@@ -469,7 +503,7 @@ abstract class Export
                     $caption = $val['value'];
                     unset($node->field_image_caption);
                 }
-
+                
                 $this->createImage($value, $caption);
 
                 if (!isset($node->primaryImage)) {
@@ -478,6 +512,16 @@ abstract class Export
             }
         }
         unset($node->field_image);
+
+        // both in filefield_paths table
+        if (isset($node->upload)) {
+            $this->writeln('Attepting upload attachment');
+            var_dump($this->upload);
+        }
+
+        if (isset($node->field_gallery_image)) {
+             $this->writeln('Attepting field_galery_image attachment');
+        }
     }
 
     protected function removeCrapFields(&$node)
@@ -643,6 +687,15 @@ abstract class Export
             $nodes = $this->queryNodes($types, $limit, $skip);
             $formatted = [];
             foreach ($nodes as &$node) {
+                //$this->writeln(sprintf('Importing Node:: %s', $node->nid));
+                if ($node->nid == $this->debugNodeId) {
+                    $this->debugNode = true;
+                }
+                if ($this->debugNode) {
+                    $this->writeln('***********************************************************************************',true,true);
+                    var_dump($node);
+                }
+
                 if (0 === $node->nid) {
                     continue;
                 }
