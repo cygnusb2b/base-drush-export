@@ -59,6 +59,28 @@ class ExportD6 extends Export
             ],
             'database'          => 'import_mni_tampabay',
             'host'              => 'tampabaymedicalnews.com'
+        ],
+         'nashvillepost'      => [
+            'Taxonomy'  => [
+                'Companies'         => 'Taxonomy\\Organization', // no company, use organization or override?
+                'County'            => 'Taxonomy\\Region',  // Location data but much more specific than locations data - use in region or put into Location with other data?
+                'Locations'         => 'Taxonomy\\Location',
+                'Main'              => 'Taxonomy\\Category', // category or topic?
+                'People'            => 'Taxonomy\\Person',
+                'Subjects'          => 'Taxonomy\\Tag',  // topic or tag?
+                'Tags'              => 'Taxonomy\\Tag'
+            ],
+            'Content'   => [
+                'article'       => 'Website\\Content\\Article',
+                'blog'          => 'Website\\Content\\Blog',
+                'gallery'       => 'Website\\Content\\MediaGallery',
+                'need_to_know'  => 'Website\\Content\\Article',
+            ],
+            'Section'   => [
+                'callout'          => 'Website\\Section',
+            ],
+            'database'          => 'import_nvp',
+            'host'              => 'nashvillepost.com'
         ]
     ];
 
@@ -170,6 +192,44 @@ class ExportD6 extends Export
         if (null !== $caption) {
             $kv['caption'] = $caption;
         }
-        $collection->insert($kv);
+
+        // only found one so far - fix in source data, leave this, or check inside insert method
+        try {
+            $collection->insert($kv);
+        } catch (\MongoDuplicateKeyException $e) {
+            $kv['_id'] = $kv['_id'].'_'.microtime(true);
+            $kv['dupe'] = TRUE;
+            $collection->insert($kv);
+        }
     }
+
+    /**
+     * {@inheritdoc}
+     */
+    protected function createDocument(array $file)
+    {
+
+        $filePath = sprintf('http://%s/%s', $this->getHost(), $file['filepath']);
+
+        $collection = $this->database->selectCollection('Document');
+        $kv = [
+            '_id'       => (int) $file['fid'],
+            'fileName'  => $file['filename'],
+            'filePath'  => $filePath,
+            'type'      => 'Document'
+        ];
+        if (null !== $caption) {
+            $kv['caption'] = $caption;
+        }
+
+        try {
+            $collection->insert($kv);
+        } catch (\MongoDuplicateKeyException $e) {
+            $kv['_id'] = $kv['_id'].'_'.microtime(true);
+            $kv['dupe'] = TRUE;
+            $collection->insert($kv);
+        }
+
+    }
+
 }
