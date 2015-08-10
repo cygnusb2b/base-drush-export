@@ -73,6 +73,7 @@ abstract class Export
     {
         $this->writeln(sprintf('Starting import for %s', $this->key), true, true);
 
+        // @jp disabling now
         $this->importUsers(); 
         $this->importTaxonomies(); 
         $this->importNodes();
