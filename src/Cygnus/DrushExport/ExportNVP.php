@@ -43,17 +43,23 @@ class ExportNVP extends ExportD6
     public $cityPaperMonth = "06";
     public $cityPaperYear = "2015";
 
+    /**
+     * Main export function.
+     */
+    public function execute()
+    {
+        $this->writeln(sprintf('Starting import for %s', $this->key), true, true);
+
+        $this->importOrders();
+        $this->importUsers();
+        $this->importTaxonomies();
+        $this->importNodes();
+
+        $this->writeln('Import complete.', true, true);
+    }
+    
     protected function importMagazineIssueNodes()
     {
-        /*
-        if (!isset($this->map['Issue']) || empty($this->map['Issue'])) {
-            $this->writeln(sprintf('You must set the issue map for %s:', $this->key), false, true);
-            $types = $this->getTypes();
-            $this->writeln(sprintf('Valid types: %s', implode(', ', $types)), true, true);
-            die();
-        }
-        */
-
         $collection = $this->database->selectCollection('Issue');
         $magazines = $this->getMagazineData();
 
@@ -145,7 +151,6 @@ class ExportNVP extends ExportD6
                 $issueId = $issueId.'np';
                 $this->addMagazineSchedule($node,$publication, $issueId);
             }
-            //$this->addMagazineSchedule($node,$publication, $issueId);
         }
     }
 
@@ -172,6 +177,134 @@ class ExportNVP extends ExportD6
             $issueId = $issue->year.$amonth.'01';
         }
         return $issueId;
+    }
+
+    /**
+     * Iterates over users and exports them.
+     */
+    protected function importUsers()
+    {
+        $this->writeln('Importing Users.', false, true);
+        $users = $this->loadUsers();
+
+        $internal_roles = array('administrator','editor','archive editor','module administrator');
+
+        $formatted = [];
+        foreach ($users as $user) {
+            if ((int) $user->uid === 0) {
+                continue;
+            }
+            $type = "Customer";
+    
+            $formatted_user = null;
+            $formatted_user = [
+                '_id'       => (int) $user->uid,
+                //'type'      => 'Customer',
+                'username'  => $user->name,
+                'password'  => $user->pass,
+                'email'     => $user->mail,
+            ];
+
+            if (!empty($user->profile_subscription)) {
+                $formatted_user['subscription']['status'] = $user->profile_subscription;
+            }
+
+            if (!empty($user->profile_authorize_id)) {
+                $formatted_user['subscription']['auth'] = $user->profile_authorize_id;
+            }
+
+            if (!empty($user->profile_expirestimestamp)) {
+                $formatted_user['subscription']['expires'] = new \MongoDate($user->profile_expirestimestamp);
+            }
+
+            if (!empty($user->profile_fname)) $formatted_user['firstName'] = $user->profile_fname;
+            if (!empty($user->profile_lname)) $formatted_user['lastName'] = $user->profile_lname;
+            if (!empty($user->profile_address1)) $formatted_user['address1'] = $user->profile_address1;
+            if (!empty($user->profile_address2)) $formatted_user['address2'] = $user->profile_address2;
+            if (!empty($user->profile_city)) $formatted_user['city'] = $user->profile_city;
+            if (!empty($user->profile_state)) $formatted_user['state'] = $user->profile_state;
+            if (!empty($user->profile_zipcode)) $formatted_user['postalCode'] = $user->profile_zipcode;
+            if (!empty($user->profile_phone)) $formatted_user['phone'] = $user->profile_phone;
+            if (!empty($user->profile_fax)) $formatted_user['fax'] = $user->profile_fax;
+
+            if (!empty($user->created)) $formatted_user['created'] = new \MongoDate($user->created);
+            if (!empty($user->login)) $formatted_user['lastLogin'] = new \MongoDate($user->login);
+            if (!empty($user->access)) $formatted_user['lastSeen'] = new \MongoDate($user->access);
+
+            if (!empty($user->roles)) {
+                foreach ($user->roles AS $roleId => $role) {
+                    $formatted_user['roles'][] = $role;
+                    if (in_array($role,$internal_roles)) $type = 'User';
+                }
+            } else {
+                $formatted_user['roles'][] = 'registered';
+            }
+            if ($user->profile_subscription == '1') {
+                $formatted_user['roles'][] = 'paid';
+            }
+
+
+            if (!empty($user->profile_sitemasonid)) $formatted_user['leagacy']['sitemasonid'] = $user->profile_sitemasonid;
+
+            $formatted[$type][] = $formatted_user;
+        }
+
+        // @jp - jw said to disable / skip creating users here
+        /*
+        if (!empty($formatted['User'])) {
+            $this->writeln(sprintf('Users: Inserting %s users.', count($formatted['User'])));
+            $collection = $this->database->selectCollection('User');
+            $collection->batchInsert($formatted['User']);
+        }
+        */
+
+        if (!empty($formatted['Customer'])) {
+            $this->writeln(sprintf('Customer: Inserting %s customers.', count($formatted['Customer'])));
+            $collection = $this->database->selectCollection('Customer');
+            $collection->batchInsert($formatted['Customer']);
+        }
+
+    }
+
+    protected function loadOrders()
+    {
+        // auxFieldTransactionLog - binary BLOB
+        // auxFieldNodeId - mostly blank, but if exists has node id to regulary content, article, etc - reference for page subscripion link was clicked? - only 330 invoices for all time
+        // auxFieldStartDate / auxFieldEndDate are blank often - only present for 1/2/3 year subscriptions?  only after a certain point in website history - useable? never present when auxNodeFieldId is
+        // smid - mystery field again (internal drupal?)
+        // auxFieldProfileId, auxFieldPaymentProfileId, auxFieldShippingAddressId - purpose clear from name but no idea where data is - id to be used within authorize.net not drupal?
+        $sql = "
+            SELECT invoiceId, uid, invoicing_type.name AS invoiceType, invoicing_paymentType.name AS paymentType, amount, description, created, auxField_StartDate, auxField_EndDate,
+            auxField_TransactionId, auxField_NodeId, auxField_CustomerProfileId, auxField_CustomerPaymentProfileId, auxField_CustomerShippingAddressId
+            FROM invoicing, invoicing_type, invoicing_paymentType
+            WHERE invoicing.typeId = invoicing_type.typeId AND invoicing.paymentTypeId = invoicing_paymentType.paymentTypeId
+            ORDER BY invoicing.invoiceId ASC
+        ";
+        $results = db_query($sql);
+        while ($row = db_fetch_array($results)) {
+            $invoices[] = $row;
+        }
+        return $invoices;
+    }
+
+    /**
+     * Iterates over users and exports them.
+     */
+    protected function importOrders()
+    {
+        $this->writeln('Importing Orders.', false, true);
+        $orders = $this->loadOrders();
+
+        $collection = $this->database->selectCollection('Orders');
+        $formatted = [];
+        foreach ($orders as $order) {
+            // remove blank/null here or after base import - need to reformat timestamp fields
+            $formatted[] = $order;
+        }
+        if (!empty($formatted)) {
+            $this->writeln(sprintf('Orders: Inserting %s Orders.', count($formatted)));
+            $collection->batchInsert($formatted);
+        }
     }
 
 }
