@@ -274,12 +274,13 @@ class ExportNVP extends ExportD6
         // smid - mystery field again (internal drupal?)
         // auxFieldProfileId, auxFieldPaymentProfileId, auxFieldShippingAddressId - purpose clear from name but no idea where data is - id to be used within authorize.net not drupal?
         $sql = "
-            SELECT invoiceId, uid, invoicing_type.name AS invoiceType, invoicing_paymentType.name AS paymentType, amount, description, created, auxField_StartDate, auxField_EndDate,
-            auxField_TransactionId, auxField_NodeId, auxField_CustomerProfileId, auxField_CustomerPaymentProfileId, auxField_CustomerShippingAddressId
-            FROM invoicing, invoicing_type, invoicing_paymentType
-            WHERE invoicing.typeId = invoicing_type.typeId AND invoicing.paymentTypeId = invoicing_paymentType.paymentTypeId
+            SELECT invoiceId, invoicing.uid, users.mail as email, invoicing_type.name AS invoiceType, invoicing_paymentType.name AS paymentType, amount, description, invoicing.created, auxField_StartDate AS startdate,
+            auxField_EndDate AS enddate, profile_values.value as role_expire, auxField_TransactionId, auxField_NodeId, auxField_CustomerProfileId, auxField_CustomerPaymentProfileId, auxField_CustomerShippingAddressId
+            FROM invoicing, invoicing_type, invoicing_paymentType, users, profile_values
+            WHERE invoicing.typeId = invoicing_type.typeId AND invoicing.paymentTypeId = invoicing_paymentType.paymentTypeId AND users.uid = invoicing.uid AND  profile_values.uid = users.uid AND profile_values.fid=9
             ORDER BY invoicing.invoiceId ASC
         ";
+
         $results = db_query($sql);
         while ($row = db_fetch_array($results)) {
             $invoices[] = $row;
@@ -298,7 +299,44 @@ class ExportNVP extends ExportD6
         $collection = $this->database->selectCollection('Orders');
         $formatted = [];
         foreach ($orders as $order) {
-            // remove blank/null here or after base import - need to reformat timestamp fields
+            switch ($order['invoiceType']) {
+                case "1 Year":
+                    $order['interval'] = 'year';
+                    $order['interval_value'] = 1;
+                    break;
+                case "1 Year":
+                    $order['interval'] = 'year';
+                    $order['interval_value'] = 1;
+                    break;
+                case "1 Year (Standard)":
+                    $order['interval'] = 'year';
+                    $order['interval_value'] = 1;
+                    break;
+                case "1 Year (Introductory)":
+                    $order['interval'] = 'year';
+                    $order['interval_value'] = 1;
+                    break;
+                case "2 Year":
+                    $order['interval'] = 'year';
+                    $order['interval_value'] = 2;
+                    break;
+                case "3 Year":
+                    $order['interval'] = 'year';
+                    $order['interval_value'] = 3;
+                    break;
+                case "Other":
+                    $order['interval'] = 'day';
+                    $order['interval_value'] = 30;
+                    break;
+                case "Article":  // wtf is this - bad data on their end?
+                    $order['interval'] = 'day';
+                    $order['interval_value'] = 30;
+                    break;
+                default:
+                    $order['interval'] = 'second';
+                    $order['interval_value'] = 1;
+                    break;
+            }
             $formatted[] = $order;
         }
         if (!empty($formatted)) {
