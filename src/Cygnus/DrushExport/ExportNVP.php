@@ -246,17 +246,17 @@ class ExportNVP extends ExportD6
 
             if (!empty($user->profile_sitemasonid)) $formatted_user['leagacy']['sitemasonid'] = $user->profile_sitemasonid;
 
+            if (empty($formatted_user['email'])) $formatted_user['email'] = $formatted_user['firstName'].'_'.$formatted_user['lastName'].'@fakedata.com';
+
             $formatted[$type][] = $formatted_user;
         }
 
         // @jp - jw said to disable / skip creating users here
-        /*
         if (!empty($formatted['User'])) {
             $this->writeln(sprintf('Users: Inserting %s users.', count($formatted['User'])));
             $collection = $this->database->selectCollection('User');
             $collection->batchInsert($formatted['User']);
         }
-        */
 
         if (!empty($formatted['Customer'])) {
             $this->writeln(sprintf('Customer: Inserting %s customers.', count($formatted['Customer'])));
