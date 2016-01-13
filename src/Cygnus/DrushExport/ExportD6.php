@@ -197,9 +197,7 @@ class ExportD6 extends Export
         try {
             $collection->insert($kv);
         } catch (\MongoDuplicateKeyException $e) {
-            $kv['_id'] = $kv['_id'].'_'.microtime(true);
-            $kv['dupe'] = TRUE;
-            $collection->insert($kv);
+            $this->writeln(sprintf('DEBUG: Skipping duplicate image `%s`', $kv['_id']));
         }
     }
 
@@ -225,9 +223,7 @@ class ExportD6 extends Export
         try {
             $collection->insert($kv);
         } catch (\MongoDuplicateKeyException $e) {
-            $kv['_id'] = $kv['_id'].'_'.microtime(true);
-            $kv['dupe'] = TRUE;
-            $collection->insert($kv);
+            $this->writeln(sprintf('DEBUG: Skipping duplicate document `%s`', $kv['_id']));
         }
 
     }
