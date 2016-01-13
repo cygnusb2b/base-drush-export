@@ -74,8 +74,8 @@ abstract class Export
         $this->writeln(sprintf('Starting import for %s', $this->key), true, true);
 
         // @jp disabling now
-        $this->importUsers(); 
-        $this->importTaxonomies(); 
+        $this->importUsers();
+        $this->importTaxonomies();
         $this->importNodes();
 
         $this->writeln('Import complete.', true, true);
@@ -167,8 +167,8 @@ abstract class Export
     {
         $this->writeln('Importing Nodes.', false, true);
 
-        $this->importWebsiteSectionNodes(); 
-        $this->importMagazineIssueNodes(); 
+        $this->importWebsiteSectionNodes();
+        $this->importMagazineIssueNodes();
         $this->importContentNodes();
 
     }
@@ -504,7 +504,7 @@ abstract class Export
                     $caption = $val['value'];
                     unset($node->field_image_caption);
                 }
-                
+
                 $this->createImage($value, $caption);
 
                 if (!isset($node->primaryImage)) {
@@ -544,10 +544,11 @@ abstract class Export
                 continue;
             }
             $formatted[] = [
-                '_id'   => (int) $term->tid,
-                'name'  => $term->name,
+                '_id'           => (int) $term->tid,
+                'name'          => $term->name,
                 'description'   => $term->description,
-                'type'  => $type
+                'type'          => $type,
+                'alias'         => drupal_lookup_path('alias', taxonomy_term_path($term))
             ];
         }
 
