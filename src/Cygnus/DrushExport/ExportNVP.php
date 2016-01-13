@@ -50,14 +50,15 @@ class ExportNVP extends ExportD6
     {
         $this->writeln(sprintf('Starting import for %s', $this->key), true, true);
 
-        $this->importOrders();
         $this->importUsers();
+        $this->importGroups();
+        $this->importOrders();
         $this->importTaxonomies();
         $this->importNodes();
 
         $this->writeln('Import complete.', true, true);
     }
-    
+
     protected function importMagazineIssueNodes()
     {
         $collection = $this->database->selectCollection('Issue');
@@ -70,7 +71,7 @@ class ExportNVP extends ExportD6
         $cityPaperIssue->year = (string) $this->cityPaperYear;
         $cityPaperIssue->image = 'citypaper.png';
         $magazines[] = $cityPaperIssue;
-        
+
         $count = $total = count($magazines) +1;
 
         $this->writeln(sprintf('Nodes: Importing %s Magazine Issues.', $count));
@@ -123,7 +124,7 @@ class ExportNVP extends ExportD6
      */
     protected function getMagazineData()
     {
-    
+
         $query = "SELECT id, month, year, image FROM magazine_covers ORDER BY year,month asc";
         $resource = db_query($query);
         $magazineData = $this->getRaw($resource);
@@ -163,8 +164,8 @@ class ExportNVP extends ExportD6
         $kv['section'] = $section;
         $collection->insert($kv);
     }
-    
-    public function getMagazineIssue($node) 
+
+    public function getMagazineIssue($node)
     {
         // need to get the last issue prior to this node's created date
         $nodeYear = date('Y',$node->created);
@@ -191,11 +192,12 @@ class ExportNVP extends ExportD6
 
         $formatted = [];
         foreach ($users as $user) {
+
             if ((int) $user->uid === 0) {
                 continue;
             }
             $type = "Customer";
-    
+
             $formatted_user = null;
             $formatted_user = [
                 '_id'       => (int) $user->uid,
@@ -264,6 +266,36 @@ class ExportNVP extends ExportD6
             $collection->batchInsert($formatted['Customer']);
         }
 
+    }
+
+    protected function loadGroups()
+    {
+        $sql = 'SELECT groupName as name, gid, smgid from groups ORDER BY gid DESC';
+        $results = db_query($sql);
+        $out = [];
+        while ($row = db_fetch_array($results)) {
+            $row['gid'] = (int) $row['gid'];
+            $row['smgid'] = (int) $row['smgid'];
+            $row['users'] = [];
+            $sql = 'SELECT uid from groupValues WHERE gid = '.$row['gid'] .';';
+            $users = db_query($sql);
+            while($r = db_fetch_array($users)) {
+                $row['users'][] = (int) $r['uid'];
+            }
+            $out[] = $row;
+        }
+        return $out;
+    }
+
+    protected function importGroups()
+    {
+        $this->writeln('Importing Groups.', false, true);
+        $groups = $this->loadGroups();
+        $collection = $this->database->selectCollection('Groups');
+        if (!empty($groups)) {
+            $this->writeln(sprintf('Inserting %s groups.', count($groups)), false, true);
+            $collection->batchInsert($groups);
+        }
     }
 
     protected function loadOrders()
