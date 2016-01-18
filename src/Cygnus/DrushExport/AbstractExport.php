@@ -156,6 +156,8 @@ abstract class Export
         foreach ($taxonomies as $vocab) {
             if (isset($this->map['Taxonomy'][$vocab->name])) {
                 $this->importTaxonomy($vocab);
+            } else {
+                $this->writeln(sprintf('Vocabulary: Skipped %s!', $vocab->name));
             }
         }
     }
@@ -380,10 +382,10 @@ abstract class Export
 
         $node->mutations = [];
 
-        $node->mutations['Website']['aliases'][] = $this->generateLegacyUri($node);
+        $node->mutations['Website']['redirects'][] = $this->generateLegacyUri($node);
 
         if (isset($node->path)) {
-            $node->mutations['Website']['aliases'][] = $node->path;
+            $node->mutations['Website']['redirects'][] = $node->path;
             unset($node->path);
         }
 
@@ -440,6 +442,14 @@ abstract class Export
 
     protected function buildRelationships(&$node)
     {
+        if (!empty($node->field_editor)) {
+            $node->authors = [];
+            foreach ($node->field_editor as $ref) {
+                $user = user_load($ref['uid']);
+                $node->authors[] = ['uid' => (int) $ref['uid'], 'name' => $user->name];
+            }
+            unset($node->field_editor);
+        }
 
         // Handle 'picture' field
         if (!empty($node->picture)) {
@@ -543,12 +553,16 @@ abstract class Export
             if ((int) $term->tid === 0) {
                 continue;
             }
+            $alias = taxonomy_term_path($term);
+            if (false !== $path = drupal_lookup_path('alias', $alias)) {
+                $alias = $path;
+            }
             $formatted[] = [
                 '_id'           => (int) $term->tid,
                 'name'          => $term->name,
                 'description'   => $term->description,
                 'type'          => $type,
-                'alias'         => drupal_lookup_path('alias', taxonomy_term_path($term))
+                'alias'         => $alias
             ];
         }
 
