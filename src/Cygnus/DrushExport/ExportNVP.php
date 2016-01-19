@@ -188,9 +188,7 @@ class ExportNVP extends ExportD6
     protected function importUsers()
     {
         $users = $this->loadUsers();
-        $this->writeln(sprintf('Importing %s "Users".', count($users)), false, true);
-
-        $internal_roles = array('administrator','editor','archive editor','module administrator');
+        $this->writeln(sprintf('Importing %s Customers.', count($users)), false, true);
 
         $formatted = [];
         foreach ($users as $user) {
@@ -203,7 +201,7 @@ class ExportNVP extends ExportD6
             $formatted_user = null;
             $formatted_user = [
                 '_id'       => (int) $user->uid,
-                //'type'      => 'Customer',
+                'type'      => 'Customer',
                 'username'  => $user->name,
                 'password'  => $user->pass,
                 'email'     => $user->mail,
@@ -236,9 +234,8 @@ class ExportNVP extends ExportD6
             if (!empty($user->access)) $formatted_user['lastSeen'] = new \MongoDate($user->access);
 
             if (!empty($user->roles)) {
-                foreach ($user->roles AS $roleId => $role) {
+                foreach ($user->roles as $roleId => $role) {
                     $formatted_user['roles'][] = $role;
-                    if (in_array($role,$internal_roles)) $type = 'User';
                 }
             } else {
                 $formatted_user['roles'][] = 'registered';
@@ -252,20 +249,13 @@ class ExportNVP extends ExportD6
 
             if (empty($formatted_user['email'])) $formatted_user['email'] = $formatted_user['firstName'].'_'.$formatted_user['lastName'].'@fakedata.com';
 
-            $formatted[$type][] = $formatted_user;
+            $formatted[] = $formatted_user;
         }
 
-        // @jp - jw said to disable / skip creating users here
-        if (!empty($formatted['User'])) {
-            $this->writeln(sprintf('Users: Inserting %s users.', count($formatted['User'])));
-            $collection = $this->database->selectCollection('User');
-            $collection->batchInsert($formatted['User']);
-        }
-
-        if (!empty($formatted['Customer'])) {
-            $this->writeln(sprintf('Customer: Inserting %s customers.', count($formatted['Customer'])));
+        if (!empty($formatted)) {
+            $this->writeln(sprintf('Customer: Inserting %s customers.', count($formatted)));
             $collection = $this->database->selectCollection('Customer');
-            $collection->batchInsert($formatted['Customer']);
+            $collection->batchInsert($formatted);
         }
 
     }
@@ -302,21 +292,24 @@ class ExportNVP extends ExportD6
 
     protected function loadOrders()
     {
-        // auxFieldTransactionLog - binary BLOB
-        // auxFieldNodeId - mostly blank, but if exists has node id to regulary content, article, etc - reference for page subscripion link was clicked? - only 330 invoices for all time
-        // auxFieldStartDate / auxFieldEndDate are blank often - only present for 1/2/3 year subscriptions?  only after a certain point in website history - useable? never present when auxNodeFieldId is
-        // smid - mystery field again (internal drupal?)
-        // auxFieldProfileId, auxFieldPaymentProfileId, auxFieldShippingAddressId - purpose clear from name but no idea where data is - id to be used within authorize.net not drupal?
-        $sql = "
-            SELECT invoiceId, invoicing.uid, users.mail as email, invoicing_type.name AS invoiceType, invoicing_paymentType.name AS paymentType, amount, description, invoicing.created, auxField_StartDate AS startdate,
-            auxField_EndDate AS enddate, profile_values.value as role_expire, auxField_TransactionId, auxField_NodeId, auxField_CustomerProfileId, auxField_TransactionId, auxField_TransactionLog, auxField_CustomerPaymentProfileId, auxField_CustomerShippingAddressId
-            FROM invoicing, invoicing_type, invoicing_paymentType, users, profile_values
-            WHERE invoicing.typeId = invoicing_type.typeId AND invoicing.paymentTypeId = invoicing_paymentType.paymentTypeId AND users.uid = invoicing.uid AND  profile_values.uid = users.uid AND profile_values.fid=9
-            ORDER BY invoicing.invoiceId ASC
-        ";
+        $sql = "SELECT invoiceId, uid, typeId, paymentTypeId, amount, description, created, auxField_StartDate as startdate, auxField_EndDate as enddate, auxField_TransactionId, auxField_NodeId, auxField_CustomerProfileId, auxField_TransactionId, auxField_TransactionLog, auxField_CustomerPaymentProfileId, auxField_CustomerShippingAddressId FROM invoicing ORDER BY invoicing.invoiceId ASC";
+        $paymentTypes = [
+            "Other",
+            "Credit Card",
+            "Check",
+            "Complimentary: Promo",
+            "Complimentary: Gift",
+            "Complimentary: Subscription Prospect",
+            "Complimentary: Advertising Prospect",
+            "Complimentary: Other",
+            "Complimentary: Promo 14-Day",
+            "Complimentary: Promo 60-Day",
+            "Complimentary: Promo 30-Day"
+        ];
 
         $results = db_query($sql);
         while ($row = db_fetch_array($results)) {
+            $row['paymentTypeId'] = $paymentTypes[$row['paymentTypeId']];
             $invoices[] = $row;
         }
         return $invoices;
@@ -334,41 +327,24 @@ class ExportNVP extends ExportD6
         $formatted = [];
         foreach ($orders as $order) {
             switch ($order['invoiceType']) {
-                case "1 Year":
+                case 1:     // 1 Year (Standard)
+                case 4:     // 1 Year (Introductory)
                     $order['interval'] = 'year';
                     $order['interval_value'] = 1;
                     break;
-                case "1 Year":
-                    $order['interval'] = 'year';
-                    $order['interval_value'] = 1;
-                    break;
-                case "1 Year (Standard)":
-                    $order['interval'] = 'year';
-                    $order['interval_value'] = 1;
-                    break;
-                case "1 Year (Introductory)":
-                    $order['interval'] = 'year';
-                    $order['interval_value'] = 1;
-                    break;
-                case "2 Year":
+                case 2:
                     $order['interval'] = 'year';
                     $order['interval_value'] = 2;
                     break;
-                case "3 Year":
+                case 3:
                     $order['interval'] = 'year';
                     $order['interval_value'] = 3;
                     break;
-                case "Other":
-                    $order['interval'] = 'day';
-                    $order['interval_value'] = 30;
-                    break;
-                case "Article":  // wtf is this - bad data on their end?
-                    $order['interval'] = 'day';
-                    $order['interval_value'] = 30;
-                    break;
+                case 0:     // "Other"
+                case 5:     // wtf is this - bad data on their end?
                 default:
-                    $order['interval'] = 'second';
-                    $order['interval_value'] = 1;
+                    $order['interval'] = 'day';
+                    $order['interval_value'] = 30;
                     break;
             }
             $formatted[] = $order;
