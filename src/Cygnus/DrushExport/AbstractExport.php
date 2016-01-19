@@ -533,6 +533,27 @@ abstract class Export
         if (isset($node->field_gallery_image)) {
              $this->writeln('Attepting field_galery_image attachment');
         }
+
+        if ('MediaGallery' === $node->type) {
+            $this->importGalleryImages($node);
+        }
+    }
+
+    protected function importGalleryImages(&$node)
+    {
+        $query = sprintf("select content_type_gallery_image.field_gallery_nid as gallery, fid, filename, filepath, uid, timestamp from files inner join content_type_gallery_image on files.fid = content_type_gallery_image.field_gallery_image_fid where content_type_gallery_image.field_gallery_nid = %s", $node->_id);
+        $resource = db_query($query);
+
+        $images = $this->getRaw($resource);
+        foreach ($images as $image) {
+            $image = json_decode(json_encode($image), true);
+            $image = $this->createImage($image);
+            $ref = [
+                'id'    => (int) $image['fid'],
+                'type'  => 'Image'
+            ];
+            $node->images[] = $ref;
+        }
     }
 
     protected function removeCrapFields(&$node)

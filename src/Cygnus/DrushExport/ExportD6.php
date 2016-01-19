@@ -192,6 +192,9 @@ class ExportD6 extends Export
         if (null !== $caption) {
             $kv['caption'] = $caption;
         }
+        if (isset($img['gallery'])) {
+            $kv['gallery'] = $img['gallery'];
+        }
 
         // only found one so far - fix in source data, leave this, or check inside insert method
         try {
