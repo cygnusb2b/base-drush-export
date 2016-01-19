@@ -16,12 +16,14 @@ class ExportNVP extends ExportD6
     protected $configs = [
         'nashvillepost'      => [
             'Taxonomy'  => [
+                'Compaines'         => 'Taxonomy\\Organization', // no company, use organization or override?
                 'Companies'         => 'Taxonomy\\Organization', // no company, use organization or override?
                 'County'            => 'Taxonomy\\Location',  // Location data but much more specific than locations data - use in region or put into Location with other data?
                 'Locations'         => 'Taxonomy\\Location',
                 'Main'              => 'Taxonomy\\Category', // category or topic?
                 'People'            => 'Taxonomy\\Person',
                 'Subjects'          => 'Taxonomy\\Tag',  // topic or tag?
+                // 'Image Galleries'   => 'Taxonomy\\Tag',  // topic or tag?
                 'Tags'              => 'Taxonomy\\Tag'
             ],
             'Content'   => [
@@ -185,8 +187,8 @@ class ExportNVP extends ExportD6
      */
     protected function importUsers()
     {
-        $this->writeln('Importing Users.', false, true);
         $users = $this->loadUsers();
+        $this->writeln(sprintf('Importing %s "Users".', count($users)), false, true);
 
         $internal_roles = array('administrator','editor','archive editor','module administrator');
 
@@ -307,7 +309,7 @@ class ExportNVP extends ExportD6
         // auxFieldProfileId, auxFieldPaymentProfileId, auxFieldShippingAddressId - purpose clear from name but no idea where data is - id to be used within authorize.net not drupal?
         $sql = "
             SELECT invoiceId, invoicing.uid, users.mail as email, invoicing_type.name AS invoiceType, invoicing_paymentType.name AS paymentType, amount, description, invoicing.created, auxField_StartDate AS startdate,
-            auxField_EndDate AS enddate, profile_values.value as role_expire, auxField_TransactionId, auxField_NodeId, auxField_CustomerProfileId, auxField_CustomerPaymentProfileId, auxField_CustomerShippingAddressId
+            auxField_EndDate AS enddate, profile_values.value as role_expire, auxField_TransactionId, auxField_NodeId, auxField_CustomerProfileId, auxField_TransactionId, auxField_TransactionLog, auxField_CustomerPaymentProfileId, auxField_CustomerShippingAddressId
             FROM invoicing, invoicing_type, invoicing_paymentType, users, profile_values
             WHERE invoicing.typeId = invoicing_type.typeId AND invoicing.paymentTypeId = invoicing_paymentType.paymentTypeId AND users.uid = invoicing.uid AND  profile_values.uid = users.uid AND profile_values.fid=9
             ORDER BY invoicing.invoiceId ASC
