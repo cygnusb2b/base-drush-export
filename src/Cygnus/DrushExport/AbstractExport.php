@@ -3,7 +3,7 @@
 namespace Cygnus\DrushExport;
 
 use InvalidArgumentException;
-use MongoClient;
+use \MongoClient;
 use DateTimeZone;
 use DateTime;
 
@@ -60,7 +60,7 @@ abstract class Export
             throw new InvalidArgumentException(sprintf('Invalid config key specified. Valid keys: `%s`.', implode(',', array_keys($this->configs))));
         }
         $this->map = $this->configs[$this->key];
-        $this->mongo = new MongoClient($dsn);
+        $this->mongo = new \MongoClient($dsn);
         $db = $this->mongo->selectDb($this->map['database']);
         $db->drop();
         $this->database = $this->mongo->selectDb($this->map['database']);
@@ -73,12 +73,18 @@ abstract class Export
     {
         $this->writeln(sprintf('Starting import for %s', $this->key), true, true);
 
-        // @jp disabling now
         $this->importUsers();
         $this->importTaxonomies();
         $this->importNodes();
 
         $this->writeln('Import complete.', true, true);
+    }
+    
+    /**
+     * Used to set legacySource for some imports
+     */
+    public function getKey() {
+        return $this->key;
     }
 
     /**
@@ -120,13 +126,19 @@ abstract class Export
             if ((int) $user->uid === 0) {
                 continue;
             }
-            $formatted[] = [
+            $kv = [
                 '_id'       => (int) $user->uid,
                 'username'  => $user->name,
                 'password'  => $user->pass,
                 'email'     => $user->mail
             ];
+            if (!empty(user->uid)) {
+                $kv['legacy']['id'] = (String) $user->uid
+                $kv['legacy']['source'] = sprintf('%s_user', $this->getKey())
+            }
+            $formatted[] = $kv;
         }
+        
         if (!empty($formatted)) {
             $this->writeln(sprintf('Users: Inserting %s users.', count($formatted)));
             $collection->batchInsert($formatted);
@@ -140,7 +152,7 @@ abstract class Export
     {
         $this->writeln('Importing Taxonomy.', false, true);
         $taxonomies = taxonomy_get_vocabularies();
-
+        
         if (!isset($this->map['Taxonomy']) || empty($this->map['Taxonomy'])) {
             $this->writeln(sprintf('You must set the taxonomy map for %s:', $this->key), true, true);
 
@@ -148,7 +160,7 @@ abstract class Export
             foreach ($taxonomies as $taxonomy) {
                 $types[] = $taxonomy->name;
             }
-
+        
             $this->writeln(sprintf('Valid types: %s', implode(', ', $types)), true, true);
             die();
         }
@@ -345,6 +357,7 @@ abstract class Export
 
     protected function addMagazineSchedule($node, $issue)
     {
+        
         $collection = $this->database->selectCollection('ScheduleMagazine');
         $type = (isset($this->map['Content'][$node->type])) ? $this->map['Content'][$node->type] : null;
         $type = str_replace('Website\\Content\\', '', $type);
@@ -626,6 +639,7 @@ abstract class Export
 
         $formatted = [];
         foreach ($nodes as $node) {
+            // @jpdev - 20190102 - just $n - broken? We don't import sections so didn't confirm - fix?
             $formatted[] = [
                 '_id'           => (int) $node->nid,
                 'name'          => $node->title,
@@ -738,10 +752,11 @@ abstract class Export
                 }
 
                 if (null !== ($type = (isset($this->map['Content'][$node->type])) ? $this->map['Content'][$node->type] : null)) {
+                    $this->convertLegacy($node);
                     $this->convertTaxonomy($node);
                     $this->convertScheduling($node);
                     $this->convertFields($node);
-                    $formatted[] = json_decode(json_encode($node), true);
+                    $formatted[] = json_decode(json_encode($node, 512), true);
                 }
             }
 
@@ -756,5 +771,19 @@ abstract class Export
             $n++;
             $count -= $limit;
         }
+    }
+    
+    // storage of legacy values pre-drush
+    public function convertLegacy(&$node) 
+    {
+        $legacy = array();
+        $legacy['id'] = (string) $node->nid;
+        $legacy['source'] = sprintf('%s_node', $this->getKey());
+        
+        $legacy['type'] = $node->type;
+        $rawNode = json_decode(json_encode($node, 512), true);
+        $legacy['raw'] = $rawNode;
+        
+        $node->legacy = $legacy;
     }
 }
