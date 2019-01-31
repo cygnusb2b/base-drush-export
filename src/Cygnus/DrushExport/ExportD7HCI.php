@@ -109,7 +109,7 @@ class ExportD7HCI extends Export
                 'teaser'    => 'field_teaser.und.0.value',
                 'authors'   => 'field_byline.und.0.value',
                 'deck'      => 'field_deck.und.0.value',
-                'images'    => 'field_image.und',
+                'images'    => ['field_image.und', 'field_sponsor_logo.und'],
                 // existing fields (used mainly by top100)
                 'phone'     => 'field_phone.und.0.value',
                 'city'      => 'field_hci100_location.und.0.value',
@@ -131,6 +131,7 @@ class ExportD7HCI extends Export
             	'majorRevenue'      => 'field_hci100_major_revenue.und.0.value',
             	'productCategories' => 'field_hci100_product_categories.und.0.value',
 	            'marketsServing'    => 'field_hci100_markets_serving.und.0.value',
+                'linkUrl'           => 'function_getRedirects',
             ]
         ]
     ];
@@ -508,38 +509,57 @@ class ExportD7HCI extends Export
             }
         }
         
-        $fieldName = $this->getFieldMapName('images');
-        if (!empty($fieldName)) {
-            $images = $this->resolveDotNotation($nodeArray, $fieldName);
-            if (!empty($images)) {
-                foreach ($images AS $image) {
-                    if (0 === (int) $image['fid']) continue;
-                    
-                    $fp = file_create_url($image['uri']);
-                    $node->legacy['refs']['images']['common'][] = $fp;
-                    
-                    // add image also
-                    $caption = null;
-                    if (isset($node->field_image_caption)) {
-                        $val = $this->getFieldValue($node->field_image_caption, $node, null);
-                        if (null !== $val) {
-                            $caption = $val['value'];
+        // modified to work on array of image fields
+        $fieldNames = $this->getFieldMapName('images');
+        if (!empty($fieldNames)) {
+            if (!is_array($fieldNames)) $fieldNames = (array) $fieldNames;
+            foreach ($fieldNames AS $fieldName) {
+                if ($debug) var_dump($fieldName);
+                $images = $this->resolveDotNotation($nodeArray, $fieldName);
+                if ($debug) var_dump($images);
+                if (!empty($images)) {
+                    foreach ($images AS $image) {
+                        if ($debug) var_dump($image);
+                        if (0 === (int) $image['fid']) continue;
+                        
+                        $fp = file_create_url($image['uri']);
+                        if ($debug) var_dump('found images');
+                        if ($debug) var_dump($fp);
+                        $node->legacy['refs']['images']['common'][] = $fp;
+                        
+                        // add image also
+                        $caption = null;
+                        if (isset($node->field_image_caption)) {
+                            $val = $this->getFieldValue($node->field_image_caption, $node, null);
+                            if (null !== $val) {
+                                $caption = $val['value'];
+                            }
                         }
-                    }
-                    if (isset($node->field_image_text)) {
-                        $val = $this->getFieldValue($node->field_image_text, $node, null);
-                        if (null !== $val) {
-                            $caption = $val['value'];
+                        if (isset($node->field_image_text)) {
+                            $val = $this->getFieldValue($node->field_image_text, $node, null);
+                            if (null !== $val) {
+                                $caption = $val['value'];
+                            }
                         }
-                    }
-                    $this->createImage($image, $caption);
-
-                    if (!isset($node->primaryImage)) {
-                        //$node->legacy['refs']['primaryImage']['common'] = (String) $image['fid'];
-                        $node->legacy['refs']['primaryImage']['common'] = (String) $fp;
+                        $this->createImage($image, $caption);
+    
+                        if (!isset($node->primaryImage)) {
+                            //$node->legacy['refs']['primaryImage']['common'] = (String) $image['fid'];
+                            $node->legacy['refs']['primaryImage']['common'] = (String) $fp;
+                        }
                     }
                 }
             }
+        }
+        
+        // added for webinars
+        //$fieldName = $this->getFieldMapName('linkUrl');
+        $redirectSource = sprintf('node/%s', $nodeArray['nid']);
+        $redirectQuery = sprintf("SELECT redirect from {redirect} where source = 'node/%s'", $nodeArray['nid']);
+        $redirectResource = db_query($redirectQuery);
+        foreach ($redirectResource as $redirectRow) {
+            $node->linkUrl = $redirectRow->redirect;
+            $node->linkText = 'Register / View';
         }
          
         // added for hci100
