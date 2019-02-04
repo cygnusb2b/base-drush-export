@@ -487,10 +487,22 @@ class ExportD7HCI extends Export
             if (!empty($authors)) {
                 if (!is_array($authors)) $authors = (array) $authors;
                 foreach ($authors AS $author) {
-                    // @jpdev - they have name, title (David Raths, Contributing Editor) - should I attempt to parse, or leave verbatium? -- latter for now
+                    // @jpdev - they have name, title (David Raths, Contributing Editor) - should I attempt to parse, or leave verbatium?
+                    $name = trim($author);
                     $contact = [
-                        'name'  => trim($author),    
+                        'name'  => $name,    
                     ];
+
+                    // need to set first/last name on contacts, calculated field will change name to blank if they are not set
+                    $nameParts = explode(" ", $name);
+                    if (count($nameParts) == 2) {
+                        $contact['firstName'] = $nameParts[0];
+                        $contact['lastName'] = $nameParts[1];
+                    } else {
+                        $contact['firstName'] = "";
+                        $contact['lastName'] = $name;
+                    }
+
                     $this->importContact($contact);
                     $legacySource = sprintf('%s_contacts', $this->getKey());
                     $node->legacy['refs']['authors'][ $legacySource][] = trim($author);
@@ -637,7 +649,7 @@ class ExportD7HCI extends Export
         if (!empty($fieldName)) {
             $rank = $this->resolveDotNotation($nodeArray, $fieldName);
             if (!empty($rank)) {
-                $node->rank = $rank;
+                $node->rank = (int) $rank;
             }
         }
         
@@ -645,7 +657,7 @@ class ExportD7HCI extends Export
         if (!empty($fieldName)) {
             $previousRank = $this->resolveDotNotation($nodeArray, $fieldName);
             if (!empty($previousRank)) {
-                $node->previousRank = $previousRank;
+                $node->previousRank = (int) $previousRank;
             }
         }
         
