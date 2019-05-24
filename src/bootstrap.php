@@ -3,6 +3,7 @@ require_once 'phar://export.phar/Cygnus/DrushExport/AbstractExport.php';
 require_once 'phar://export.phar/Cygnus/DrushExport/ExportD6.php';
 require_once 'phar://export.phar/Cygnus/DrushExport/ExportNVP.php';
 require_once 'phar://export.phar/Cygnus/DrushExport/ExportD7.php';
+require_once 'phar://export.phar/Cygnus/DrushExport/ExportD7HCI.php';
 
 define('DRUPAL_VERSION', drush_core_status('drupal-version')['drupal-version']);
 
@@ -29,6 +30,9 @@ if (!isset($argv[6])) {
 $key = $argv[6];
 if ('nashvillepost' == $key) {
     $class = 'cygnus\\DrushExport\\ExportNVP';
+}
+if ('hci' == $key) {
+    $class = 'Cygnus\\DrushExport\\ExportD7HCI';
 }
 
 
