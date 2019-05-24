@@ -3,7 +3,6 @@
 namespace Cygnus\DrushExport;
 
 use InvalidArgumentException;
-use \MongoClient;
 use DateTimeZone;
 use DateTime;
 
@@ -639,11 +638,9 @@ abstract class Export
 
         $formatted = [];
         foreach ($nodes as $node) {
-            // @jpdev - 20190102 - just $n - broken? We don't import sections so didn't confirm - fix?
             $formatted[] = [
                 '_id'           => (int) $node->nid,
-                'name'          => $node->title,
-                'description'   => $n
+                'name'          => $node->title
             ];
         }
 
