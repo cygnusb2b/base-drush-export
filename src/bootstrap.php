@@ -31,7 +31,7 @@ $key = $argv[6];
 if ('nashvillepost' == $key) {
     $class = 'cygnus\\DrushExport\\ExportNVP';
 }
-if ('hci' == $key) {
+if (in_array($key, ['hci', 'aw'])) {
     $class = 'Cygnus\\DrushExport\\ExportD75';
 }
 

@@ -6,12 +6,12 @@ use DateTimeZone;
 use DateTime;
 
 /**
- * Provides support for exporting from Drupal 7
+ * Provides support for exporting from Drupal 7.5x
  *
  * Needs working (as in you can login to admin) site for drush to work
  * from drush repo root: php -d phar.readonly=0 compile
  * from drupal site root (ie /sites/heathcare-informatics/): drush scr $pathToPhar $mongoIp $importConfigKey
- * ie: drush scr /home/ec2-user/environment/base-drush-export-master/build/export.phar 10.0.12.156 hci
+ * ie: drush scr ~/environment/base-drush-export-master/build/export.phar [MONGO_IP] [IMPORT_KEY]
  *
  */
 class ExportD7HCI extends Export
@@ -20,6 +20,134 @@ class ExportD7HCI extends Export
      * {@inheritdoc}
      */
     protected $configs = [
+        'aw'  => [
+            'Taxonomy'  => [
+                // Static lists (prefix with key aka `Column Type: Feed Forward`)
+                'App Platforms/OS'          => 'Taxonomy\Bin',          // ~5 items
+                'Blog Beat'                 => 'Taxonomy\Bin',          // ~ 20 items
+                'Column Type'               => 'Taxonomy\Bin',          // ~ 10 items
+                'Company Type'              => 'Taxonomy\Bin',          // ~ 5 items
+                'Download Subtype'          => 'Taxonomy\Bin',          // 2 items (Tactical Brief, Whitepaper)
+                'Industry Type'             => 'Taxonomy\Bin',          // 4 items
+                'Leadership Session'        => 'Taxonomy\Bin',          // 5 items, years 2015-2019
+                'Source Type'               => 'Taxonomy\Bin',          // 5 items, used to denote UGC and/or display concerns
+                'Subtype'                   => 'Taxonomy\Bin',          // 12 items, used to determine article sub type
+
+                // Tags
+                'Tags'                      => 'Taxonomy\Tag',
+
+                // Hierarchical
+                'Automation Strategies'     => 'Taxonomy\Category',     // 100+ items
+                'Industries'                => 'Taxonomy\Industry',     // 20+ items (top categories?)
+                'Topics'                    => 'Taxonomy\Topic',        // 11 items
+
+                // New hierarchies, if kept
+                'Technologies'              => 'Taxonomy\Market',       // ~50 items, similar to `Industries` taxonomy (if kept, create Technologies instead of Market)
+                'Coverage Type'             => 'Taxonomy\Coverage',     // 20+ items, Similar to website sections?
+
+                // // Unused
+                // 'DFP Ad Categories',
+                // 'Sponsors',
+            ],
+            'Content'   => [
+                '360_package_spin_rotate' => 'Website\\Content\\Product',      // Needs some custom field handling for the 3D display
+                'apps'  => 'Website\\Content\\Product',                        // Custom field handling
+                'around_the_world'  => 'Website\\Content\\Article',            // Around the world section/blog
+
+                'article' => 'Website\\Content\\Article',                      // Make all Articles by default
+                // Sub types! @todo remap type based on sub type taxonomy
+                // 'article__news' => 'Website\\Content\\News',                // Custom sub type mappings
+                // 'article__perspective'  => 'Website\\Content\\Blog',
+                // 'article__column'  => 'Website\\Content\\Blog',
+
+                'page'  => 'Website\\Content\\Page',
+                'blog'  => 'Website\\Content\\Blog',
+                'company' => 'Website\\Content\\Company',
+                'download'  => 'Website\\Content\\Document',
+                // 'form_template'
+                // 'leadership_data_card'                                       // Additional information about companies, unsure where used.
+                // 'leadership_online_profile'                                  // More info,
+                // 'leadership_print_profile'                                   // More info, print revision??
+                'mini_bant' => 'Website\\Content\\TextAd',                      // Sponsored content, gated video/whitepaper landing page
+                // 'mobile_webform'
+                // 'opt_out_form'
+                'playbook'  => 'Website\\Content\\Document',                    // May necessitate a custom content type, but a gated landing page for a PDF download
+                'podcast' => 'Website\\Content\\Podcast',
+                // 'pop_up_registration'                                        // Popup ad form pushing to omeda sub
+                'registration_form' => 'Website\\Content\\Document',            // Majority appear to be PDF gates (some weird ones like ENL signups)
+                'stage_one_form'  => 'Website\\Content\\TextAd',                // Landing pages/promo blurbs pushing to registration_forms
+                'video' => 'Website\\Content\\Video',
+                'webform' => 'Website\\Content\\TextAd',                        // Same as stage_one_form
+                'webinar' => 'Website\\Content\\Webinar',                       // All old, currently unpublished
+                'webinar_registration'  => 'Website\\Content\\Webinar',         // Current webinar landing form
+                // 'webinar_series'
+                'week_in_review'  => 'Website\\Content\\News',                  // News/sponsored review, "Beyond the Factory Walls" primary section??
+                'whitepaper'  => 'Website\\Content\\Whitepaper',
+            ],
+            'Section'   => [
+                // 'page' => 'Website\\Section',
+                // 'page2' => 'Website\\Section',
+            ],
+            'Issue'     => [
+                'magazine_covers' => 'Magazine\\Issue',                         // magazine cover image, digital edition url
+            ],
+            'database'          => 'drupal_ebm_hci',
+            'structure' =>  [
+                'stripFields'   => [
+                    // 'vid',
+                    // 'log',
+                    // 'tnid',
+                    // 'cid', // comment id - prob not needed but search data to confirm
+                    // 'translate',
+                    // 'print_html_display',
+                    // 'print_html_display_comment',
+                    // 'print_html_display_urllist',
+                    // 'last_comment_uid',
+                    // 'last_comment_name',
+                    // 'last_comment_timestamp',
+                    // 'revision_timestamp', // looks to be same as 'changed' which we are using
+                    // 'language' // use for determining path to text content, need to keep?
+                    //'comment','promote, 'sticky','premium_content','comment_count','picture','data'  // other fields I see but leaving for now
+                    //'moderate','format','feed','field_priority','field_leagcy_id','rdf_mapping','metatags','field_legacy_article_id');  // fields in old code, but not seen so far in hci
+                ],
+                '_id'       => 'nid',
+                'name'      => 'title',
+                'status'    => 'status',
+                // 'createdBy' => 'uid',
+                // 'updatedBy' => 'revision_uid',  // was using uid for both but I changed - ok, or less reliable?  @jpdev
+                // 'created'   => 'created',
+                // 'updated'   => 'changed',
+                // 'published' => 'changed',
+                // 'mutations' => 'path',
+                // 'body'      => 'body.und.0.value',
+                // 'teaser'    => 'field_teaser.und.0.value',
+                // 'authors'   => 'field_byline.und.0.value',
+                // 'deck'      => 'field_deck.und.0.value',
+                // 'images'    => ['field_image.und', 'field_sponsor_logo.und'],
+                // // existing fields (used mainly by top100)
+                // 'phone'     => 'field_phone.und.0.value',
+                // 'city'      => 'field_hci100_location.und.0.value',
+                // 'website'   => 'field_website.und.0.value',
+                // 'socialLinks'       => ['field_twitter.und.0.value', '	field_linkedin.und.0.value', 'field_facebook.und.0.value'],
+                // //'taxonomy'  => 'taxonomy',  // moving taxonomy refs in to legacy.refs from the outset, so not needed here (unless I move convertTaxonomy code into the convertFields method, which might be good)
+                // // these are for the new top100 content type
+                // 'rank'              => 'field_hci100_rank.und.0.value',
+                // 'previousRank'      => 'field_hci100_previous_rank.und.0.value',
+                // 'founded'           => 'field_hci100_founded.und.0.value',
+                // 'companyType'       => 'field_hci100_company_type.und.0.value',
+                // 'employees'         => 'field_hci100_employees.und.0.value',
+                // 'revenueCurrent'    => 'field_hci100_revenue_current.und.0.value',
+                // 'revenuePrior1'     => 'field_hci100_revenue_prior1.und.0.value',
+                // 'revenuePriorYear1' => 'field_hci100_revenue_prior1_yyyy.und.0.value',
+                // 'revenuePrior2'     => 'field_hci100_revenue_prior2.und.0.value',
+                // 'revenuePriorYear2' => 'field_hci100_revenue_prior2_yyyy.und.0.value',
+                // 'companyExecutives' => 'field_hci100_company_executives.und.0.value',
+                // 'majorRevenue'      => 'field_hci100_major_revenue.und.0.value',
+                // 'productCategories' => 'field_hci100_product_categories.und.0.value',
+                // 'marketsServing'    => 'field_hci100_markets_serving.und.0.value',
+                // 'linkUrl'           => 'function_getRedirects',
+            ]
+        ],
         'hci'       => [
             'Taxonomy'  => [
                 'Policy & Payment'                      => 'Taxonomy\\Category',
