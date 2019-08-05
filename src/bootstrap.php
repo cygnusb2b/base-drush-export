@@ -32,7 +32,7 @@ if ('nashvillepost' == $key) {
     $class = 'cygnus\\DrushExport\\ExportNVP';
 }
 if ('hci' == $key) {
-    $class = 'Cygnus\\DrushExport\\ExportD7HCI';
+    $class = 'Cygnus\\DrushExport\\ExportD75';
 }
 
 
