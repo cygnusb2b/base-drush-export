@@ -1,0 +1,19 @@
+{
+    "name": "cygnusb2b/base-drush-export",
+    "description": "A PHAR project to export data to base-platform format from Drupal",
+    "require": {
+        "mongodb/mongodb": "^1.4"
+    },
+    "autoload": {
+        "psr-0": {
+            "Cygnus\\": "src/"
+        }
+    },
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Josh Worden",
+            "email": "solocommand@gmail.com"
+        }
+    ]
+}

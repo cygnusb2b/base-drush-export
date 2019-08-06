@@ -14,7 +14,7 @@ use DateTime;
  * ie: drush scr ~/environment/base-drush-export-master/build/export.phar [MONGO_IP] [IMPORT_KEY]
  *
  */
-class ExportD75 extends AbstractExport
+class ExportD75AW extends AbstractExport
 {
     /**
      * {@inheritdoc}
@@ -148,120 +148,6 @@ class ExportD75 extends AbstractExport
                 // 'linkUrl'           => 'function_getRedirects',
             ]
         ],
-        'hci'       => [
-            'Taxonomy'  => [
-                'Policy & Payment'                      => 'Taxonomy\\Category',
-                'Population Health & Data Analytics'    => 'Taxonomy\\Category',
-                'Cybersecurity & Privacy'               => 'Taxonomy\\Category',
-                'Clinical IT'                           => 'Taxonomy\\Category',
-                'Business & Revenue Cycle Management'   => 'Taxonomy\\Category',
-                'Tech Innovation'                       => 'Taxonomy\\Category',
-                'Interoperability & HIE'                => 'Taxonomy\\Category',
-                'Medical IT'                            => 'Taxonomy\\Category',
-                'Topics Of Interest'                    => 'Taxonomy\\Topic',
-                'Keyword Topics'                        => 'Taxonomy\\Tag',
-                'HCI 100'                               => 'Taxonomy\\Category',
-                'Multimedia'                            => 'Taxonomy\\Tag',
-                'HIT Summit'                            => 'Taxonomy\\Tag',
-                'iTunes Category'                       => 'Taxonomy\\Topic',
-                'Section'                               => 'Taxonomy\\Category',
-                'Ask The Editor'                        => 'Taxonomy\\Topic',
-                'Content Alerts'                        => 'Taxonomy\\Tag',
-                'eNews'                                 => 'Taxonomy\\Tag',
-                '3rd Party Content'                     => 'Taxonomy\\Tag'
-            ],
-            'Content'   => [
-                'article' => 'Website\\Content\\Article',
-                'blog' => 'Website\\Content\\Blog',
-                'faq' => 'Website\\Content\\Article',
-                'hci100' => 'Website\\Content\\Top100',  // LOTS of additional fields
-                'hci_iht2_marketing_solutions' => 'Website\\Content\\Article',
-                'innovator' => 'Website\\Content\\Article',
-                //'magazine_issue ' => 'Magazine\\Issue',
-                'marketing_solutions' => 'Website\\Content\\Article', // Mainly from 2014, only 8 since 9/9/2014
-                'media_kit' => 'Website\\Content\\Article', // Only about 24 items, all from 2014 and seem to all redirect to same page atm: https://www.healthcare-informatics.com/hci-iht2-marketing-solutions/about-hci-iht2
-                'news' => 'Website\\Content\\News',
-                //'page' => 'Website\\Content\\Page',  // earlier drupal sites we did as sections, but this is 'about us' and other static pages, so do differently here?
-                //'page2' => 'Website\\Content\\Page',
-                //'panel' => 'Website\\Content\\Page',
-                //'poll' => 'Website\\Content\\Poll',  // no support in base4
-                'prospectus' => 'Website\\Content\\Article', // 5 items from 2012-2013
-                'research' => 'Website\\Content\\Article', // 4 items from 2014
-                'summit' => 'Website\\Content\\Article', // 45 items from 2014 (non 'publshed' atm)
-                'video' => 'Website\\Content\\Video',
-                'webform' => 'Website\\Content\\Article', // 69 total, 2 from 2018, 0:2017, 9:2016.  2018 ones edited to say 'now closed', has body but also custom form element and submission - not supported in base4
-                'webinar' => 'Website\\Content\\Webinar',  // look to have reg form in body.  admin talks about on24 but body content in admin does not match display (template?) http://ihealthtran.hs-sites.com/can-informatics-drive-clinical-quality-improvements-alongside-operational-improvements-in-cancer-care
-                'whitepaper' => 'Website\\Content\\Whitepaper',
-                'zebra' => 'Website\\Content\\Article',  // no content
-                'contributor' => 'Website\\Content\\Contact', // not seen in admin, but seen as node 'type' from drush - will have to add support
-                'newsgen_edition' => 'Website\\Content\\News', // no idea, only seen in drush @jpdev - investigate
-                'newsgen_newsletter' => 'Website\\Content\\News', // no idea, only seen in drush @jpdev - investigate
-            ],
-            'Section'   => [
-                'page' => 'Website\\Section',
-                'page2' => 'Website\\Section',
-                'panel' => 'Website\\Section',
-            ],
-            'Issue'     => [
-                'magazine_issue'         => 'Magazine\\Issue',
-            ],
-            'database'          => 'drupal_ebm_hci',
-            'structure' =>  [
-                'stripFields'   => [
-                    'vid',
-                    'log',
-                    'tnid',
-                    'cid', // comment id - prob not needed but search data to confirm
-                    'translate',
-                    'print_html_display',
-                    'print_html_display_comment',
-                    'print_html_display_urllist',
-                    'last_comment_uid',
-                    'last_comment_name',
-                    'last_comment_timestamp',
-                    'revision_timestamp', // looks to be same as 'changed' which we are using
-                    'language' // use for determining path to text content, need to keep?
-                    //'comment','promote, 'sticky','premium_content','comment_count','picture','data'  // other fields I see but leaving for now
-                    //'moderate','format','feed','field_priority','field_leagcy_id','rdf_mapping','metatags','field_legacy_article_id');  // fields in old code, but not seen so far in hci
-                ],
-                '_id'       => 'nid',
-                'name'      => 'title',
-                'status'    => 'status',
-                'createdBy' => 'uid',
-                'updatedBy' => 'revision_uid',  // was using uid for both but I changed - ok, or less reliable?  @jpdev
-                'created'   => 'created',
-                'updated'   => 'changed',
-                'published' => 'changed',
-                'mutations' => 'path',
-                'body'      => 'body.und.0.value',
-                'teaser'    => 'field_teaser.und.0.value',
-                'authors'   => 'field_byline.und.0.value',
-                'deck'      => 'field_deck.und.0.value',
-                'images'    => ['field_image.und', 'field_sponsor_logo.und'],
-                // existing fields (used mainly by top100)
-                'phone'     => 'field_phone.und.0.value',
-                'city'      => 'field_hci100_location.und.0.value',
-                'website'   => 'field_website.und.0.value',
-                'socialLinks'       => ['field_twitter.und.0.value', '	field_linkedin.und.0.value', 'field_facebook.und.0.value'],
-                //'taxonomy'  => 'taxonomy',  // moving taxonomy refs in to legacy.refs from the outset, so not needed here (unless I move convertTaxonomy code into the convertFields method, which might be good)
-                // these are for the new top100 content type
-                'rank'              => 'field_hci100_rank.und.0.value',
-            	'previousRank'      => 'field_hci100_previous_rank.und.0.value',
-            	'founded'           => 'field_hci100_founded.und.0.value',
-            	'companyType'       => 'field_hci100_company_type.und.0.value',
-            	'employees'         => 'field_hci100_employees.und.0.value',
-            	'revenueCurrent'    => 'field_hci100_revenue_current.und.0.value',
-            	'revenuePrior1'     => 'field_hci100_revenue_prior1.und.0.value',
-            	'revenuePriorYear1' => 'field_hci100_revenue_prior1_yyyy.und.0.value',
-            	'revenuePrior2'     => 'field_hci100_revenue_prior2.und.0.value',
-            	'revenuePriorYear2' => 'field_hci100_revenue_prior2_yyyy.und.0.value',
-            	'companyExecutives' => 'field_hci100_company_executives.und.0.value',
-            	'majorRevenue'      => 'field_hci100_major_revenue.und.0.value',
-            	'productCategories' => 'field_hci100_product_categories.und.0.value',
-	            'marketsServing'    => 'field_hci100_markets_serving.und.0.value',
-                'linkUrl'           => 'function_getRedirects',
-            ]
-        ]
     ];
 
     // strip fields so they do not show as unsupported, once identified as useless
@@ -283,6 +169,14 @@ class ExportD75 extends AbstractExport
             //if (count($sourceField == 1)) $sourceField = current($sourceField);
         }
         return $sourceField;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    protected function importWebsiteSectionNodes()
+    {
+        $this->writeln('Skipping website section import.');
     }
 
     /**
@@ -955,7 +849,9 @@ class ExportD75 extends AbstractExport
         }
 
         try {
-            $collection->insert($kv);
+            return method_exists($collection, 'insert')
+                ? $collection->insert($kv)
+                : $collection->insertOne($kv);
         } catch (\Exception $e) {
             var_dump('some error - dupe fid?');
             var_dump($kv);
@@ -965,7 +861,10 @@ class ExportD75 extends AbstractExport
     /**
      * {@inheritdoc}
      *
-     * Creates an image to create as Asset in base4
+     * Notes: https://www.drupal.org/project/term_merge/issues/2104769
+     * taxonomy_get_tree will return duplicates when encountering vocab nodes with
+     * multiple parents. Therefore, key the formatted result set, force parent to
+     * a single value, and then array_values the end results for import.
      *
      */
     protected function importTaxonomy($vocab)
@@ -974,9 +873,9 @@ class ExportD75 extends AbstractExport
         $terms = taxonomy_get_tree($vocab->vid);
         $type = str_replace('Taxonomy\\', '', $this->map['Taxonomy'][$vocab->name]);
         $formatted = [];
-        var_dump($terms);
         foreach ($terms as $term) {
-            if ((int) $term->tid === 0) {
+            $id = (int) $term->tid;
+            if ($id === 0) {
                 continue;
             }
             $alias = taxonomy_term_uri($term);
@@ -985,24 +884,27 @@ class ExportD75 extends AbstractExport
                 $alias = $path;
             }
 
-            $formatted[] = [
-                '_id'           => (int) $term->tid,
-                //'name'          => $term->name,
+            $parent = (int) array_pop($term->parents);
+
+            $record = [
+                '_id'           => $id,
                 'name'          => $type === 'Bin' ? sprintf('%s: %s', $vocab->name, $term->name) : $term->name,
-                'description'   => $term->description,
                 'type'          => $type,
                 'alias'         => $alias,
                 'legacy'        => [
                     'id'            => (String) $term->tid,
-                    'source'        => sprintf('%s_taxonomy_%s', $this->getKey(), $vocab->machine_name)
+                    'source'        => sprintf('%s_taxonomy_%s', $this->getKey(), $vocab->machine_name),
                 ]
             ];
-            if ((int) $term->tid === 1345) {
-                var_dump($formatted[count($formatted) - 1]);
-            }
+
+            if ($parent !== 0) $record['parent'] = $parent;
+            if ($term->description) $record['description'] = $term->description;
+
+            $formatted[$id] = $record;
         }
 
         if (!empty($formatted)) {
+            $formatted = array_values($formatted);
             $this->writeln(sprintf('Vocabulary: Inserting %s %s terms.', count($formatted), $type));
             return method_exists($collection, 'batchInsert')
                 ? $collection->batchInsert($formatted)
@@ -1047,7 +949,9 @@ class ExportD75 extends AbstractExport
             $this->writeln(sprintf('Valid types: %s', implode(', ', $types)), true, true);
         }
 
-        $collection = $this->database->selectCollection('Issue');
+        $collection = method_exists($this->database, 'selectCollection')
+            ? $this->database->selectCollection('Issue')
+            : $this->database->Issue;
         $types = array_keys($this->map['Issue']);
 
         $count = $total = (int) $this->countNodes($types);
@@ -1066,58 +970,41 @@ class ExportD75 extends AbstractExport
                 'created'           => $node->created,
                 'updated'           => $node->changed,
                 'status'            => (int) $node->status,
+                'legacy'            => [
+                    'id'                => (string) $node->nid,
+                    'source'            => sprintf('%s_issue_%s', $this->getKey(), $node->type),
+                    'raw'               => $node,
+                ],
             ];
 
             if (!empty($node->body)) $kv['description'] = $node->body;
 
-            $kv['legacy']['id'] = (string) $node->nid;
-            $kv['legacy']['source'] = sprintf('%s_issue', $this->getKey());
-
-            //$nodeArray = json_decode(json_encode($node, 512), true);
-            $kv['legacy']['raw'] = $node;
-
-            // mailDate not defined in drupal, titles are often close enough to calculate, so try, fallback to Jan 2000 if all fails
-            $mailDate = strtotime($node->title);
+            $mailDate = strtotime(str_replace('Automation World', '', $node->title));
             if ($mailDate === false) {
                 // mailDate was not cleanly formatted, perform usual adjustments to try to determine mailDate
 
                 // trim it up
                 $title = trim($node->title);
 
-                // First/Second/Third/Fouth Quarter
-                $title = str_replace('First Quarter', 'January', $title);
-                $title = str_replace('Second Quarter', 'April', $title);
-                $title = str_replace('Third Quarter', 'July', $title);
-                $title = str_replace('Fourth Quarter', 'October', $title);
-
                 // strip 'Digital Suppliment'
-                $title = str_replace(' Digital Supplement', '', $title);
+                $title = str_replace('Automation World - ', '', $title);
 
-                // April/May 2017
-                if (false !== strpos($title, '/')) {
-                    $slashParts = explode("/", $title);
-                    $spaceParts = explode(" ", $slashParts[1]);
-                    $title = sprintf("%s %s", $slashParts[0], $spaceParts[1]);
-                }
+                // Try and regex parse out ".*\w{3} \d{4}" or similar to get IIOT suppliement asdfasdf november 2018
 
                 // try to do mailDate again
                 $mailDate = strtotime($title);
-
-                // if still bad, leave blank if set to ignore, otherwise use Jan 2000
-                if ($mailDate === false) {
-                    //$ignore = ['Online', 'HRCM 2007'];
-                    if (!in_array($title, $ignore)) {
-                        if ($title == 'HRCM 2007') {
-                            $mailDate = strtotime('January 2007');
-                        } else {
-                            $mailDate = strtotime('January 2000');
-                        }
-                    }
+                if(!$mailDate) {
+                    $this->writeln(sprintf('Unable to parse mailDate from title %s.', $node->title));
+                    throw new \InvalidArgumentException();
                 }
+
             }
             $mailDate = new DateTime(date('c', $mailDate), $tz);
 
-            if (false !== $mailDate) $kv['mailDate'] = $mailDate->format('c');
+            if (false !== $mailDate) {
+                $kv['mailDate'] = $mailDate->format('c');
+                $kv['legacy']['shortName'] = strtolower($mailDate->format('My'));
+            }
 
             // coverImage
             if (!empty($node->field_image)) {
@@ -1130,33 +1017,11 @@ class ExportD75 extends AbstractExport
                 $imageUrl = file_create_url($imageData['uri']);
                 $kv['legacy']['refs']['coverImage']['common'] = $imageUrl;
             }
-            if (false !== $mailDate) $kv['legacy']['shortName'] = strtolower($mailDate->format('My'));
 
-            // @jpdev - Not sure if we can count on this always existing, use this or ScheduleMagaizne drush collection to do magaizne scheduling
-            // atm base4 set to use both legacy.schedule.print on issue AND legacy.schedule.print.issue on articles to schedule
-            if (!empty($node->field_noderef_article)) {
-                $legacySource = sprintf('%s_nid', $this->getKey());
-                foreach ($node->field_noderef_article['und'] AS $scheduleNid) {
-                     $kv['legacy']['schedule']['print'][$legacySource][] = $scheduleNid['nid'];
-                }
-            }
-
-            if (isset($node->field_nxtbook_link)) {
-                foreach ($node->field_nxtbook_link as $link) {
-                    if (array_key_exists('value', $link) && null === $link['value']) {
-                        continue;
-                    }
-                    $kv['digitalEditionUrl'] = rtrim($link['value']);
-                }
-            }
-
-            if (isset($node->field_issue_link)) {
-                foreach ($node->field_issue_link as $link) {
-                    if (array_key_exists('value', $link) && null === $link['value']) {
-                        continue;
-                    }
-                    $kv['digitalEditionUrl'] = rtrim($link['value']);
-                }
+            // digital edition links
+            if (!empty($node->field_link)) {
+                $url = $node->field_link['und'][0];
+                $kv['digitalEditionUrl'] = $url['url'];
             }
 
             $formatted[] = $kv;

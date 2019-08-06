@@ -9,7 +9,7 @@ use DateTime;
 /**
  * Wrapper for core logic in Drupal imports
  */
-abstract class Export
+abstract class AbstractExport
 {
 
     // @jp - tmp to debug a specific node on new data sets
@@ -59,10 +59,19 @@ abstract class Export
             throw new InvalidArgumentException(sprintf('Invalid config key specified. Valid keys: `%s`.', implode(',', array_keys($this->configs))));
         }
         $this->map = $this->configs[$this->key];
-        $this->mongo = new \MongoClient($dsn);
-        $db = $this->mongo->selectDb($this->map['database']);
-        $db->drop();
-        $this->database = $this->mongo->selectDb($this->map['database']);
+
+        if (class_exists('MongoClient')) {
+            $this->mongo = new \MongoClient($dsn);
+            $db = $this->mongo->selectDb($this->map['database']);
+            $db->drop();
+            $this->database = $this->mongo->selectDb($this->map['database']);
+        } else {
+            $this->mongo = new \MongoDB\Client($dsn);
+            $db = $this->mongo->{$this->map['database']};
+            $db->drop();
+            echo "Dropped database " . $this->map['database'];
+            $this->database = $this->mongo->{$this->map['database']};
+        }
     }
 
     /**
@@ -78,7 +87,7 @@ abstract class Export
 
         $this->writeln('Import complete.', true, true);
     }
-    
+
     /**
      * Used to set legacySource for some imports
      */
@@ -119,7 +128,9 @@ abstract class Export
         $this->writeln('Importing Users.', false, true);
         $users = $this->loadUsers();
 
-        $collection = $this->database->selectCollection('User');
+        $collection = method_exists($this->database, 'selectCollection')
+            ? $this->database->selectCollection('User')
+            : $this->database->User;
         $formatted = [];
         foreach ($users as $user) {
             if ((int) $user->uid === 0) {
@@ -131,16 +142,18 @@ abstract class Export
                 'password'  => $user->pass,
                 'email'     => $user->mail
             ];
-            if (!empty(user->uid)) {
-                $kv['legacy']['id'] = (String) $user->uid
-                $kv['legacy']['source'] = sprintf('%s_user', $this->getKey())
+            if (!empty($user->uid)) {
+                $kv['legacy']['id'] = (String) $user->uid;
+                $kv['legacy']['source'] = sprintf('%s_user', $this->getKey());
             }
             $formatted[] = $kv;
         }
-        
+
         if (!empty($formatted)) {
             $this->writeln(sprintf('Users: Inserting %s users.', count($formatted)));
-            $collection->batchInsert($formatted);
+            return method_exists($collection, 'batchInsert')
+                ? $collection->batchInsert($formatted)
+                : $collection->insertMany($formatted);
         }
     }
 
@@ -151,7 +164,7 @@ abstract class Export
     {
         $this->writeln('Importing Taxonomy.', false, true);
         $taxonomies = taxonomy_get_vocabularies();
-        
+
         if (!isset($this->map['Taxonomy']) || empty($this->map['Taxonomy'])) {
             $this->writeln(sprintf('You must set the taxonomy map for %s:', $this->key), true, true);
 
@@ -159,7 +172,7 @@ abstract class Export
             foreach ($taxonomies as $taxonomy) {
                 $types[] = $taxonomy->name;
             }
-        
+
             $this->writeln(sprintf('Valid types: %s', implode(', ', $types)), true, true);
             die();
         }
@@ -356,8 +369,9 @@ abstract class Export
 
     protected function addMagazineSchedule($node, $issue)
     {
-        
-        $collection = $this->database->selectCollection('ScheduleMagazine');
+        $collection = method_exists($this->database, 'selectCollection')
+            ? $this->database->selectCollection('ScheduleMagazine')
+            : $this->database->ScheduleMagazine;
         $type = (isset($this->map['Content'][$node->type])) ? $this->map['Content'][$node->type] : null;
         $type = str_replace('Website\\Content\\', '', $type);
         $kv = [
@@ -368,7 +382,10 @@ abstract class Export
             'issue'     => (int) $issue->nid,
             'section'   => null
         ];
-        $collection->insert($kv);
+
+        return method_exists($collection, 'insert')
+            ? $collection->insert($kv)
+            : $collection->insertOne($kv);
     }
 
     protected function convertFields(&$node)
@@ -578,7 +595,9 @@ abstract class Export
 
     protected function importTaxonomy($vocab)
     {
-        $collection = $this->database->selectCollection('Taxonomy');
+        $collection = method_exists($this->database, 'selectCollection')
+            ? $this->database->selectCollection('Taxonomy')
+            : $this->database->Taxonomy;
         $terms = taxonomy_get_tree($vocab->vid);
         $type = str_replace('Taxonomy\\', '', $this->map['Taxonomy'][$vocab->name]);
         $formatted = [];
@@ -627,7 +646,9 @@ abstract class Export
             die();
         }
 
-        $collection = $this->database->selectCollection('Section');
+        $collection = method_exists($this->database, 'selectCollection')
+            ? $this->database->selectCollection('Section')
+            : $this->database->Section;
         $types = array_keys($this->map['Section']);
 
         $count = $total = (int) $this->countNodes($types);
@@ -659,7 +680,9 @@ abstract class Export
             die();
         }
 
-        $collection = $this->database->selectCollection('Issue');
+        $collection = method_exists($this->database, 'selectCollection')
+            ? $this->database->selectCollection('Issue')
+            : $this->database->Issue;
         $types = array_keys($this->map['Issue']);
 
         $count = $total = (int) $this->countNodes($types);
@@ -721,7 +744,9 @@ abstract class Export
             die();
         }
 
-        $collection = $this->database->selectCollection('Content');
+        $collection = method_exists($this->database, 'selectCollection')
+            ? $this->database->selectCollection('Content')
+            : $this->database->Content;
         $types = array_keys($this->map['Content']);
 
         $count = $total = (int) $this->countNodes($types);
@@ -769,18 +794,18 @@ abstract class Export
             $count -= $limit;
         }
     }
-    
+
     // storage of legacy values pre-drush
-    public function convertLegacy(&$node) 
+    public function convertLegacy(&$node)
     {
         $legacy = array();
         $legacy['id'] = (string) $node->nid;
         $legacy['source'] = sprintf('%s_node', $this->getKey());
-        
+
         $legacy['type'] = $node->type;
         $rawNode = json_decode(json_encode($node, 512), true);
         $legacy['raw'] = $rawNode;
-        
+
         $node->legacy = $legacy;
     }
 }

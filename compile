@@ -1,7 +1,7 @@
 #!/usr/bin/env php
 <?php
 
-$srcRoot = __DIR__.'/src';
+$root = __DIR__;
 
 $target = sprintf('%s/build/%s', __DIR__, 'export.phar');
 
@@ -10,10 +10,11 @@ if (file_exists($target)) {
 }
 
 $phar = new Phar($target, 0, 'export.phar');
+$phar->setAlias('export.phar');
 $phar->setSignatureAlgorithm(\Phar::SHA1);
 $phar->startBuffering();
 
-$dir = new RecursiveDirectoryIterator($srcRoot);
+$dir = new RecursiveDirectoryIterator($root);
 $Iterator = new RecursiveIteratorIterator($dir);
 $Regex = new RegexIterator($Iterator, '/^.+\.php$/i', RecursiveRegexIterator::GET_MATCH);
 
@@ -22,13 +23,13 @@ foreach ($Regex as $key => $value) {
         continue;
     }
     $file = new SplFileInfo($key);
-    $path = strtr(str_replace($srcRoot.'/', '', $file->getRealPath()), '\\', '/');
+    $path = strtr(str_replace($root.'/', '', $file->getRealPath()), '\\', '/');
     $content = file_get_contents($file);
-
+    if (getenv('DEBUG')) echo "Including file ". $path . "\n";
     $phar->addFromString($path, $content);
 }
 
-$stub = file_get_contents(sprintf('%s/bootstrap.php', $srcRoot));
+$stub = file_get_contents(sprintf('%s/src/bootstrap.php', $root));
 
 $phar->setStub($stub);
 $phar->stopBuffering();

@@ -5,7 +5,7 @@ namespace Cygnus\DrushExport;
 /**
  * Provides support for exporting from Drupal 6
  */
-class ExportD6 extends Export
+class ExportD6 extends AbstractExport
 {
     /**
      * {@inheritdoc}

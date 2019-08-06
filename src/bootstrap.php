@@ -1,15 +1,20 @@
 <?php
-require_once 'phar://export.phar/Cygnus/DrushExport/AbstractExport.php';
-require_once 'phar://export.phar/Cygnus/DrushExport/ExportD6.php';
-require_once 'phar://export.phar/Cygnus/DrushExport/ExportNVP.php';
-require_once 'phar://export.phar/Cygnus/DrushExport/ExportD7.php';
-require_once 'phar://export.phar/Cygnus/DrushExport/ExportD7HCI.php';
+require_once 'phar://export.phar/vendor/autoload.php';
+// require_once 'phar://export.phar/src/Cygnus/DrushExport/AbstractExport.php';
+// require_once 'phar://export.phar/src/Cygnus/DrushExport/ExportD6.php';
+// require_once 'phar://export.phar/src/Cygnus/DrushExport/ExportNVP.php';
+// require_once 'phar://export.phar/src/Cygnus/DrushExport/ExportD7.php';
+// require_once 'phar://export.phar/src/Cygnus/DrushExport/ExportD75.php';
 
-define('DRUPAL_VERSION', drush_core_status('drupal-version')['drupal-version']);
+define('DRUPAL_VERSION', function_exists('drush_core_status') ? drush_core_status('drupal-version')['drupal-version'] : null);
 
 $class = 'Cygnus\\DrushExport\\ExportD6';
 if (version_compare(DRUPAL_VERSION, '7.0') >= 0) {
-    $class = 'Cygnus\\DrushExport\\ExportD7';
+    if (version_compare(DRUPAL_VERSION, '7.5') >= 0) {
+        $class = 'Cygnus\\DrushExport\\ExportD75';
+    } else {
+        $class = 'Cygnus\\DrushExport\\ExportD7';
+    }
 }
 
 ini_set('memory_limit', -1);
@@ -28,13 +33,8 @@ if (!isset($argv[6])) {
     exit(1);
 }
 $key = $argv[6];
-if ('nashvillepost' == $key) {
-    $class = 'cygnus\\DrushExport\\ExportNVP';
-}
-if (in_array($key, ['hci', 'aw'])) {
-    $class = 'Cygnus\\DrushExport\\ExportD75';
-}
-
+if ('nashvillepost' == $key) $class = 'cygnus\\DrushExport\\ExportNVP';
+if ('aw' == $key) $class = 'Cygnus\DrushExport\ExportD75AW';
 
 $export = new $class($key, $dsn);
 $export->execute();
