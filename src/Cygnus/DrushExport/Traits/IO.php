@@ -13,21 +13,38 @@ trait IO {
   protected $indent = 0;
 
   /**
-   * Handles output sanitization.
+   * Indents all following output.
    *
-   * @final
-   * @access protected
+   * @see     self::writeln()
+   * @param   int     $n              Number of 'tabs' to indent by.
+   */
+  final protected function indent($num = 1) {
+    $this->indent += $num;
+  }
+
+  /**
+   * Outdents all following output.
    *
-   * @param string $text The text to output
-   * @param boolean $breakAfter Add a linebreak after the text
-   * @param boolean $breakBefore Add a linebreak before the text
+   * @see     self::writeln()
+   * @param   int     $n              Number of 'tabs' to outdent by.
+   */
+  final protected function outdent($num = -1) {
+    $this->indent += $num;
+  }
+
+  /**
+   * Unified text output for extending classes. Writes lines in a standard way.
+   *
+   * @param   string  $text           The line of text to write to the screen.
+   * @param   boolean $breakAfter     If a full line break should be added after the line.
+   * @param   boolean $breakBefore    If a full line break should be added before the line.
    */
   final protected function writeln($text, $breakAfter = false, $breakBefore = false) {
-    // Enforce a line break on all lines.
-    $text = sprintf("%s\r\n", $text);
+    $indent = ($this->indent > 0) ? $this->indent : 0;
+    $text = sprintf('%s%s', str_repeat(' ', 4 * $indent), $text);
     if (true === $breakAfter) $text = sprintf("%s\r\n", $text);
     if (true == $breakBefore) $text = sprintf("\r\n%s", $text);
-    echo $text;
+    $this->output->writeln($text);
   }
 
   /**
@@ -53,7 +70,7 @@ trait IO {
 
     $bar = $this->getProgressBar($total, $label);
 
-    $this->writeln('', true, true);
+    $this->writeln('');
     $bar->start();
 
     while ($count > 0) {
@@ -75,7 +92,7 @@ trait IO {
     }
 
     $bar->finish();
-    $this->writeln('', true, true);
+    $this->writeln('');
   }
 
   protected function getProgressBar($total = 0, $label = null) {

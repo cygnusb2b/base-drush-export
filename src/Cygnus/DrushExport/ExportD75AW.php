@@ -412,6 +412,124 @@ class ExportD75AW extends AbstractExport
         }
     }
 
+    /**
+     * {@inheritDoc}
+     */
+    protected function importContentTypeNodes($type, $limit = 100)
+    {
+        $counter = function() use ($type) {
+            return $this->countNodes([$type]);
+        };
+
+        $retriever = function($num, $skip) use ($type) {
+            return $this->queryNodes([$type], $num, $skip);
+        };
+
+        $modifier = function($node) use ($type) {
+            $nid = (int) $node->nid;
+            if (0 === $nid) return;
+            $this->convertLegacy($node);
+            $this->convertTaxonomy($node);
+            $this->convertScheduling($node);
+            $this->convertFields($node);
+            $set = json_decode(json_encode($node, 512), true);
+            return [
+                'filter'    => [ '_id'  => $nid ],
+                'update'    => [ '$set' => $set ],
+            ];
+        };
+
+        $persister = function($ops) {
+            $this->dbal->batchUpsert($this->database, 'Content', $ops);
+        };
+
+
+        $this->loop($counter, $retriever, $modifier, $persister, sprintf('Content (%s)', $type), $limit);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    protected function importMagazineIssueTypeNodes($type, $limit = 100)
+    {
+        $tz = new DateTimeZone('America/Chicago');
+
+        $counter = function() use ($type) {
+            return $this->countNodes([$type]);
+        };
+
+        $retriever = function($num, $skip) use ($type) {
+            return $this->queryNodes([$type], $num, $skip);
+        };
+
+        $modifier = function($node) use ($type, $tz) {
+            $nid = (int) $node->nid;
+            if (0 === $nid) return;
+
+            $set = [
+                '_id'               => (int) $node->nid,
+                'name'              => $node->title,
+                'created'           => $node->created,
+                'updated'           => $node->changed,
+                'status'            => (int) $node->status,
+                'legacy'            => [
+                    'id'                => (string) $node->nid,
+                    'source'            => sprintf('%s_issue_%s', $this->getKey(), $node->type),
+                    'raw'               => $node,
+                ],
+            ];
+
+            if (!empty($node->body)) $set['description'] = $node->body;
+
+            $mailDate = strtotime(str_replace('Automation World', '', $node->title));
+            if ($mailDate === false) {
+                $title = trim($node->title);
+                $title = str_replace('Automation World - ', '', $title);
+                // Try and regex parse out ".*\w{3} \d{4}" or similar to get IIOT suppliement asdfasdf november 2018
+                if (\preg_match('/^.*?([\w]{1,}\s[\d]{2,})/i', $title, $matches)) $title = $matches[1];
+
+                $mailDate = strtotime($title);
+                if(!$mailDate) $this->writeln(sprintf('Unable to parse mailDate from title %s.', $node->title));
+            }
+            $mailDate = new DateTime(date('c', $mailDate), $tz);
+
+            if (false !== $mailDate) {
+                $set['mailDate'] = $mailDate->format('c');
+                $set['legacy']['shortName'] = strtolower($mailDate->format('My'));
+            }
+
+            // coverImage
+            if (!empty($node->field_image)) {
+                $imageData = $node->field_image['und'][0];
+
+                // create Image for later reference resolution
+                $this->createImage($imageData);
+
+                // set ref on issue as well
+                $imageUrl = file_create_url($imageData['uri']);
+                $set['legacy']['refs']['coverImage']['common'] = $imageUrl;
+            }
+
+            // digital edition links
+            if (!empty($node->field_link)) {
+                $url = $node->field_link['und'][0];
+                $set['digitalEditionUrl'] = $url['url'];
+            }
+
+            return [
+                'filter'    => [ '_id'  => $nid ],
+                'update'    => [ '$set' => $set ],
+            ];
+        };
+
+        $persister = function($ops) {
+            $this->dbal->batchUpsert($this->database, 'Issue', $ops);
+        };
+
+
+        $this->loop($counter, $retriever, $modifier, $persister, sprintf('Issue (%s)', $type));
+    }
+
     protected $term_cache = [];
 
     /**
@@ -732,9 +850,6 @@ class ExportD75AW extends AbstractExport
         $id = (int) $img['fid'];
         if ($id === 0) return;
 
-        $collection = method_exists($this->database, 'selectCollection')
-            ? $this->database->selectCollection('Image')
-            : $this->database->Image;
         $kv = [
             '_id'       => $id,
             'type'      => 'Image',
@@ -753,14 +868,9 @@ class ExportD75AW extends AbstractExport
             ]
         ];
 
-        try {
-            return method_exists($collection, 'insert')
-                ? $collection->insert($kv)
-                : $collection->insertOne($kv);
-        } catch (\Exception $e) {
-            var_dump('some error - dupe fid?');
-            var_dump($kv);
-        }
+        $filter = ['_id' => $id];
+        $update = ['$set' => $kv];
+        return $this->dbal->upsert($this->database, 'Image', $filter, $update);
     }
 
     /**
@@ -771,50 +881,60 @@ class ExportD75AW extends AbstractExport
      * multiple parents. Therefore, key the formatted result set, force parent to
      * a single value, and then array_values the end results for import.
      *
+     * This shouldn't matter now that we're doing bulk upserts, as it should just
+     * be overwritten.
+     *
      */
     protected function importTaxonomy($vocab)
     {
-        $collection = $this->database->selectCollection('Taxonomy');
+        $limit = 100;
         $terms = taxonomy_get_tree($vocab->vid);
-        $type = str_replace('Taxonomy\\', '', $this->map['Taxonomy'][$vocab->name]);
-        $formatted = [];
-        foreach ($terms as $term) {
-            $id = (int) $term->tid;
-            if ($id === 0) {
-                continue;
-            }
-            $alias = taxonomy_term_uri($term);
-            $alias = $alias['path'];
-            if (false !== $path = drupal_lookup_path('alias', $alias)) {
-                $alias = $path;
-            }
+        $count = count($terms);
+        $terms = array_chunk($terms, $limit);
 
+        $counter = function() use ($count) {
+            return $count;
+        };
+
+        $retriever = function($limit, $skip) use ($terms) {
+            $index = $skip / $limit;
+            return $terms[$index];
+        };
+
+        $modifier = function($term) use ($vocab) {
+            $tid = (int) $term->tid;
+            if ($tid === 0) return;
+            $type = str_replace('Taxonomy\\', '', $this->map['Taxonomy'][$vocab->name]);
+            $alias = taxonomy_term_uri($term)['path'];
+            if (false !== $path = drupal_lookup_path('alias', $alias)) $alias = $path;
             $parent = (int) array_pop($term->parents);
 
-            $record = [
-                '_id'           => $id,
-                'name'          => $type === 'Bin' ? sprintf('%s: %s', $vocab->name, $term->name) : $term->name,
-                'type'          => $type,
-                'alias'         => $alias,
-                'legacy'        => [
-                    'id'            => (String) $term->tid,
-                    'source'        => sprintf('%s_taxonomy_%s', $this->getKey(), $vocab->machine_name),
-                ]
+            $op = [
+                'filter'    => [ '_id' => $tid ],
+                'update'    => [
+                    '$set'  => [
+                        '_id'       => $tid,
+                        'type'      => $type,
+                        'name'      => $type === 'Bin' ? sprintf('%s: %s', $vocab->name, $term->name) : $term->name,
+                        'alias'         => $alias,
+                        'legacy'        => [
+                            'id'            => (String) $term->tid,
+                            'source'        => sprintf('%s_taxonomy_%s', $this->getKey(), $vocab->machine_name),
+                        ],
+                    ]
+                ],
             ];
 
-            if ($parent !== 0) $record['parent'] = $parent;
-            if ($term->description) $record['description'] = $term->description;
+            if ($parent !== 0) $op['update']['$set']['parent'] = $parent;
+            if ($term->description) $op['update']['$set']['description'] = $term->description;
+            return $op;
+        };
 
-            $formatted[$id] = $record;
-        }
+        $persister = function($ops) {
+            $this->dbal->batchUpsert($this->database, 'Taxonomy', $ops);
+        };
 
-        if (!empty($formatted)) {
-            $formatted = array_values($formatted);
-            $this->writeln(sprintf('Vocabulary: Inserting %s %s terms.', count($formatted), $type));
-            return method_exists($collection, 'batchInsert')
-                ? $collection->batchInsert($formatted)
-                : $collection->insertMany($formatted);
-        }
+        $this->loop($counter, $retriever, $modifier, $persister, sprintf('Taxonomy (%s)', $vocab->name), $limit);
     }
 
     /**
@@ -823,9 +943,9 @@ class ExportD75AW extends AbstractExport
      * Creates an image to create as Asset in base4
      *
      */
-    protected function importContact($contact) {
-        $collection = $this->database->selectCollection('Content');
-        $formatted[] = [
+    protected function importContact($contact)
+    {
+        $kvs = [
             'name'          => $contact['name'],
             'type'          => 'Contact',
             'legacy'        => [
@@ -833,111 +953,12 @@ class ExportD75AW extends AbstractExport
                 'source'        => sprintf('%s_contacts', $this->getKey())
             ]
         ];
-        if (!empty($formatted)) {
-            return method_exists($collection, 'batchInsert')
-                ? $collection->batchInsert($formatted)
-                : $collection->insertMany($formatted);
-        }
+
+        $filter = ['legacy.id' => $contact['name']];
+        $update = ['$set' => $kvs];
+        return $this->dbal->upsert($this->database, 'Content', $filter, $update);
     }
 
-    /**
-     * {@inheritdoc}
-     *
-     * Create Issue elements to migrate to base4 Magazine/Issue entries
-     *
-     */
-    protected function importMagazineIssueNodes()
-    {
-        if (!isset($this->map['Issue']) || empty($this->map['Issue'])) {
-            $this->writeln(sprintf('You must set the issue map for %s:', $this->key), false, true);
-            $types = $this->getTypes();
-            $this->writeln(sprintf('Valid types: %s', implode(', ', $types)), true, true);
-        }
-
-        $collection = method_exists($this->database, 'selectCollection')
-            ? $this->database->selectCollection('Issue')
-            : $this->database->Issue;
-        $types = array_keys($this->map['Issue']);
-
-        $count = $total = (int) $this->countNodes($types);
-
-        $this->writeln(sprintf('Nodes: Importing %s Magazine Issues.', $count));
-
-        $nodes = $this->queryNodes($types, 0, 0);
-        $tz = new DateTimeZone('America/Chicago');
-
-        $formatted = [];
-        foreach ($nodes as $node) {
-
-            $kv = [
-                '_id'               => (int) $node->nid,
-                'name'              => $node->title,
-                'created'           => $node->created,
-                'updated'           => $node->changed,
-                'status'            => (int) $node->status,
-                'legacy'            => [
-                    'id'                => (string) $node->nid,
-                    'source'            => sprintf('%s_issue_%s', $this->getKey(), $node->type),
-                    'raw'               => $node,
-                ],
-            ];
-
-            if (!empty($node->body)) $kv['description'] = $node->body;
-
-            $mailDate = strtotime(str_replace('Automation World', '', $node->title));
-            if ($mailDate === false) {
-                // mailDate was not cleanly formatted, perform usual adjustments to try to determine mailDate
-
-                // trim it up
-                $title = trim($node->title);
-
-                // strip 'Digital Suppliment'
-                $title = str_replace('Automation World - ', '', $title);
-
-                // Try and regex parse out ".*\w{3} \d{4}" or similar to get IIOT suppliement asdfasdf november 2018
-                if (\preg_match('/^.*?([\w]{1,}\s[\d]{2,})/i', $title, $matches)) $title = $matches[1];
-
-                // try to do mailDate again
-                $mailDate = strtotime($title);
-                if(!$mailDate) $this->writeln(sprintf('Unable to parse mailDate from title %s.', $node->title));
-
-            }
-            $mailDate = new DateTime(date('c', $mailDate), $tz);
-
-            if (false !== $mailDate) {
-                $kv['mailDate'] = $mailDate->format('c');
-                $kv['legacy']['shortName'] = strtolower($mailDate->format('My'));
-            }
-
-            // coverImage
-            if (!empty($node->field_image)) {
-                $imageData = $node->field_image['und'][0];
-
-                // create Image for later reference resolution
-                $this->createImage($imageData);
-
-                // set ref on issue as well
-                $imageUrl = file_create_url($imageData['uri']);
-                $kv['legacy']['refs']['coverImage']['common'] = $imageUrl;
-            }
-
-            // digital edition links
-            if (!empty($node->field_link)) {
-                $url = $node->field_link['und'][0];
-                $kv['digitalEditionUrl'] = $url['url'];
-            }
-
-            $formatted[] = $kv;
-        }
-
-        if (!empty($formatted)) {
-            $this->writeln(sprintf('Nodes: Inserting %s Magazine Issues.', count($formatted)));
-            return method_exists($collection, 'batchInsert')
-                ? $collection->batchInsert($formatted)
-                : $collection->insertMany($formatted);
-        }
-
-    }
 
     /**
      * {@inheritdoc}

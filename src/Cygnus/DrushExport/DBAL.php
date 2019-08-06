@@ -32,17 +32,24 @@ final class DBAL {
   }
 
   public function insert($db, $coll, $payload) {
-    $coll = $this->getCollection($db, $coll);
+    $collection = $this->getCollection($db, $coll);
     return $this->isMongoDB
-      ? $coll->insertOne($payload)
-      : $coll->insert($payload);
+      ? $collection->insertOne($payload)
+      : $collection->insert($payload);
+  }
+
+  public function upsert($db, $coll, $filter, $update) {
+    $collection = $this->getCollection($db, $coll);
+    return $this->isMongoDB
+      ? $collection->updateOne($filter, $update, ['upsert' => true])
+      : $collection->update($filter, $update, ['upsert' => true ]);
   }
 
   public function batchInsert($db, $coll, $documents) {
-    $coll = $this->getCollection($db, $coll);
+    $collection = $this->getCollection($db, $coll);
     return $this->isMongoDB
-      ? $coll->insertMany($documents)
-      : $coll->insert($documents);
+      ? $collection->insertMany($documents)
+      : $collection->insert($documents);
   }
 
   public function batchUpsert($db, $coll, $ops) {

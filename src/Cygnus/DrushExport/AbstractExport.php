@@ -76,8 +76,8 @@ abstract class AbstractExport
         $this->writeln(sprintf('Starting import for %s', $this->key));
 
         $this->importUsers();
-        // $this->importTaxonomies();
-        // $this->importNodes();
+        $this->importTaxonomies();
+        $this->importNodes();
 
         $this->writeln('Import complete.', true, true);
     }
@@ -138,6 +138,8 @@ abstract class AbstractExport
     protected function importTaxonomies()
     {
         $this->writeln('Importing Taxonomy.', false, true);
+        $this->indent();
+
         $taxonomies = taxonomy_get_vocabularies();
 
         if (!isset($this->map['Taxonomy']) || empty($this->map['Taxonomy'])) {
@@ -156,9 +158,11 @@ abstract class AbstractExport
             if (isset($this->map['Taxonomy'][$vocab->name])) {
                 $this->importTaxonomy($vocab);
             } else {
-                $this->writeln(sprintf('Vocabulary: Skipped %s!', $vocab->name));
+                $this->writeln(sprintf('Vocabulary: Skipped %s!', $vocab->name), true, true);
             }
         }
+        $this->outdent();
+
     }
 
     /**
@@ -167,11 +171,13 @@ abstract class AbstractExport
     protected function importNodes()
     {
         $this->writeln('Importing Nodes.', false, true);
+        $this->indent();
 
-        // $this->importWebsiteSectionNodes();
-        // $this->importMagazineIssueNodes();
+        $this->importWebsiteSectionNodes();
+        $this->importMagazineIssueNodes();
         $this->importContentNodes();
 
+        $this->outdent();
     }
 
     /**
@@ -570,6 +576,9 @@ abstract class AbstractExport
 
     protected function importTaxonomy($vocab)
     {
+        // @todo update
+        throw new \BadMethodCallException('This method has not yet been rewritten.');
+
         $collection = method_exists($this->database, 'selectCollection')
             ? $this->database->selectCollection('Taxonomy')
             : $this->database->Taxonomy;
@@ -614,6 +623,9 @@ abstract class AbstractExport
 
     protected function importWebsiteSectionNodes()
     {
+        // @todo update
+        throw new \BadMethodCallException('This method has not yet been rewritten.');
+
         if (!isset($this->map['Section']) || empty($this->map['Section'])) {
             $this->writeln(sprintf('You must set the section map for %s:', $this->key), false, true);
             $types = $this->getTypes();
@@ -646,7 +658,7 @@ abstract class AbstractExport
         }
     }
 
-    protected function importMagazineIssueNodes()
+    final protected function importMagazineIssueNodes()
     {
         if (!isset($this->map['Issue']) || empty($this->map['Issue'])) {
             $this->writeln(sprintf('You must set the issue map for %s:', $this->key), false, true);
@@ -654,6 +666,20 @@ abstract class AbstractExport
             $this->writeln(sprintf('Valid types: %s', implode(', ', $types)), true, true);
             die();
         }
+
+        $types = array_keys($this->map['Issue']);
+
+        foreach ($types as $type) {
+            $this->importMagazineIssueTypeNodes($type, $limit);
+        }
+
+        $this->outdent();
+    }
+
+    protected function importMagazineIssueTypeNodes($type, $limit = 100)
+    {
+        // @todo update
+        throw new \BadMethodCallException('This method has not yet been rewritten.');
 
         $collection = method_exists($this->database, 'selectCollection')
             ? $this->database->selectCollection('Issue')
@@ -710,8 +736,11 @@ abstract class AbstractExport
         }
     }
 
-    protected function importContentNodes($limit = 100)
+    final protected function importContentNodes($limit = 100)
     {
+        $this->writeln('Importing Content Nodes.', false, true);
+        $this->indent();
+
         if (!isset($this->map['Content']) || empty($this->map['Content'])) {
             $this->writeln(sprintf('You must set the content map for %s:', $this->key), false, true);
             $types = $this->getTypes();
@@ -719,58 +748,19 @@ abstract class AbstractExport
             die();
         }
 
-        $collection = method_exists($this->database, 'selectCollection')
-            ? $this->database->selectCollection('Content')
-            : $this->database->Content;
         $types = array_keys($this->map['Content']);
 
-        $count = $total = (int) $this->countNodes($types);
-
-        $this->writeln(sprintf('Nodes: Importing %s documents.', $count));
-
-        $n = $inserted = 0;
-
-        while ($count >= 0) {
-            $skip = $limit * $n;
-            $nodes = $this->queryNodes($types, $limit, $skip);
-            $formatted = [];
-            foreach ($nodes as &$node) {
-                //$this->writeln(sprintf('Importing Node:: %s', $node->nid));
-                if ($node->nid == $this->debugNodeId) {
-                    $this->debugNode = true;
-                }
-                if ($this->debugNode) {
-                    $this->writeln('***********************************************************************************',true,true);
-                    var_dump($node);
-                }
-
-                if (0 === $node->nid) {
-                    continue;
-                }
-
-                if (null !== ($type = (isset($this->map['Content'][$node->type])) ? $this->map['Content'][$node->type] : null)) {
-                    $this->convertLegacy($node);
-                    $this->convertTaxonomy($node);
-                    $this->convertScheduling($node);
-                    $this->convertFields($node);
-                    $formatted[] = json_decode(json_encode($node, 512), true);
-                }
-            }
-
-            $inserted += count($formatted);
-            $percentage = ($total == 0) ? 0 : round($inserted / $total * 100, 2);
-
-            if (!empty($formatted)) {
-                $result = method_exists($collection, 'batchInsert')
-                    ? $collection->batchInsert($formatted)
-                    : $collection->insertMany($formatted);
-            }
-
-            $this->writeln(sprintf('Nodes: Inserted %s/%s documents (%s%%).', str_pad($inserted, strlen($total), ' ', STR_PAD_LEFT), $total, $percentage));
-            $n++;
-            $count -= $limit;
+        foreach ($types as $type) {
+            $this->importContentTypeNodes($type, $limit);
         }
+
+        $this->outdent();
     }
+
+    /**
+     * Imports content nodes of the specified type
+     */
+    abstract protected function importContentTypeNodes($type, $limit = 100);
 
     // storage of legacy values pre-drush
     public function convertLegacy(&$node)
