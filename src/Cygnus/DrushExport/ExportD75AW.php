@@ -113,17 +113,18 @@ class ExportD75AW extends AbstractExport
                 '_id'       => 'nid',
                 'name'      => 'title',
                 'status'    => 'status',
-                // 'createdBy' => 'uid',
-                // 'updatedBy' => 'revision_uid',  // was using uid for both but I changed - ok, or less reliable?  @jpdev
-                // 'created'   => 'created',
-                // 'updated'   => 'changed',
-                // 'published' => 'changed',
-                // 'mutations' => 'path',
-                // 'body'      => 'body.und.0.value',
-                // 'teaser'    => 'field_teaser.und.0.value',
+                'createdBy' => 'uid',
+                'updatedBy' => 'revision_uid',  // was using uid for both but I changed - ok, or less reliable?  @jpdev
+                'created'   => 'created',
+                'updated'   => 'changed',
+                'published' => 'created',
+                'mutations' => 'path',
+                'type'      => 'field_term_subtype.und.0.tid',
+                'body'      => 'body.und.0.value',
+                'teaser'    => 'field_deckhead.und.0.value',
                 // 'authors'   => 'field_byline.und.0.value',
                 // 'deck'      => 'field_deck.und.0.value',
-                // 'images'    => ['field_image.und', 'field_sponsor_logo.und'],
+                'images'    => ['field_image.und', 'field_article_images.und'],
                 // // existing fields (used mainly by top100)
                 // 'phone'     => 'field_phone.und.0.value',
                 // 'city'      => 'field_hci100_location.und.0.value',
@@ -164,6 +165,7 @@ class ExportD75AW extends AbstractExport
         $sourceField = null;
         if (empty($this->map['structure'][$baseName])) {
             $this->writeln(sprintf('Expected base field not mapped in config: %s', $baseName), true, true);
+            throw new \InvalidArgumentException();
         } else {
             $sourceField = $this->map['structure'][$baseName];
             //if (count($sourceField == 1)) $sourceField = current($sourceField);
@@ -410,405 +412,310 @@ class ExportD75AW extends AbstractExport
         }
     }
 
+    protected $term_cache = [];
+
     /**
      * {@inheritdoc}
+     *
+     * Reformats node data into consumable fields
      */
     protected function convertFields(&$node)
     {
-        // @jpdev - just use array the whole time?
-        // due to storing entire old node in legacy.raw, need to increase the depth of encoding
         $nodeArray = json_decode(json_encode($node, 512), true);
 
+        // type
         $node->type = str_replace('Website\\Content\\', '', $this->map['Content'][$node->type]);
+        $tid = $this->resolveDotNotation($nodeArray, 'field_term_subtype.und.0.tid');
+        if ($tid) {
+            if (!isset($this->term_cache[$tid])) {
+                $type = taxonomy_term_load($tid);
+                $this->term_cache[$tid] = $type->name;
+            }
+            $type = $this->term_cache[$tid];
+            if (in_array($type, ['News'])) $node->type = 'News';
+            if (in_array($type, ['Perspective', 'Column'])) $node->type = 'Blog';
+        }
 
-        // method for each base4 element
         // _id
-        $fieldName = $this->getFieldMapName('_id');
-        if (!empty($fieldName)) {
-            $node->_id = (int) $node->$fieldName;
-        }
+        $node->_id = (int) $node->nid;
+        $node->name = $node->title;
+        $node->status = (int) $node->status;
 
-        // name
-        $fieldName = $this->getFieldMapName('name');
-        if (!empty($fieldName)) {
-            $node->name = $node->$fieldName;
-        }
+        $node->legacy['refs']['createdBy']['aw_user'] = $node->uid;
+        $node->legacy['refs']['updatedBy']['aw_user'] = $node->revision_uid;
 
-        // status
-        $fieldName = $this->getFieldMapName('status');
-        if (!empty($fieldName)) {
-            $node->status = (int) $node->$fieldName;
-        }
+        $node->created = (int) $node->created;
+        $node->updated = (int) $node->updated;
+        $node->published = (int) $node->created;
 
-        // createdBy
-        $fieldName = $this->getFieldMapName('createdBy');
-        if (!empty($fieldName)) {
-            $legacySource = sprintf('%s_user', $this->getKey());
-            $node->legacy['refs']['createdBy'][$legacySource] = $node->$fieldName;
-        }
-
-        // updatedBy
-        $fieldName = $this->getFieldMapName('updatedBy');
-        if (!empty($fieldName)) {
-            $legacySource = sprintf('%s_user', $this->getKey());
-            $node->legacy['refs']['updatedBy'][$legacySource] = $node->$fieldName;
-        }
-
-        // created
-        $fieldName = $this->getFieldMapName('created');
-        if (!empty($fieldName)) {
-            $node->created = (int) $node->$fieldName;
-        }
-
-        // updated
-        $fieldName = $this->getFieldMapName('updated');
-        if (!empty($fieldName)) {
-            $node->updated = (int) $node->$fieldName;
-        }
-
-        // published
-        $fieldName = $this->getFieldMapName('published');
-        if (!empty($fieldName)) {
-            $node->published = (int) $node->$fieldName;
-        }
-
-        // redirects
-        $node->mutations = [];
-        $node->mutations['Website']['redirects'][] = drupal_get_path_alias(sprintf('node/%s', $node->_id));
-        $node->mutations['Website']['redirects'][] = sprintf('node/%s', $node->_id);
-        $fieldName = $this->getFieldMapName('mutations');
-        if (!empty($fieldName) && !empty($node->$fieldName)) {
-            $node->mutations['Website']['redirects'][] = $node->$fieldName;
-        }
+        // Redirects
+        $redirects = &$node->mutations['Website']['redirects'];
+        $redirects[] = sprintf('node/%s', $node->_id);
+        $redirects[] = drupal_get_path_alias(sprintf('node/%s', $node->_id));
+        $q = sprintf("SELECT source from {redirect} where source = 'node/%s'", $node->nid);
+        foreach (db_query($q) as $r) $redirects[] = $r['source'];
 
         // body
-        $fieldName = $this->getFieldMapName('body');
-        if (!empty($fieldName)) {
-            $body = $this->resolveDotNotation($nodeArray, $fieldName);
-            if (!empty($body)) {
-                $node->body = $body;
-            } else {
-                // since body is a field in drupal and base, even if empty we have to set to empty (or will be left with drupal's language.[].value, etc format)
-                $node->body = null;
-            }
-        }
+        $body = $this->resolveDotNotation($nodeArray, 'body.und.0.value');
+        $node->body = empty($body) ? null : $body;
 
         // teaser
-        $fieldName = $this->getFieldMapName('teaser');
-        if (!empty($fieldName)) {
-            $teaser = $this->resolveDotNotation($nodeArray, $fieldName);
-            if (!empty($teaser)) {
-                $node->teaser = $teaser;
-            }
+        $teaser = $this->resolveDotNotation($nodeArray, 'field_deckhead.und.0.value');
+        if (!empty($teaser)) $node->teaser = $teaser;
+
+        $author = $this->resolveDotNotation($nodeArray, 'field_byline.und.0.value');
+        if ($author) {
+            list($first, $last) = explode(' ', $author, 2);
+            $title = $this->resolveDotNotation($nodeArray, 'field_author_title.und.0.value');
+            $this->importContact([
+                'firstName' => $first,
+                'lastName' => $last,
+                'title' => $title,
+            ]);
+            $legacySource = sprintf('%s_contacts', $this->getKey());
+            $node->legacy['refs']['authors'][$legacySource][] = trim($author);
         }
 
-        // authors
-        $fieldName = $this->getFieldMapName('authors');
-        if (!empty($fieldName)) {
-            $authors = $this->resolveDotNotation($nodeArray, $fieldName);
-            if (!empty($authors)) {
-                if (!is_array($authors)) $authors = (array) $authors;
-                foreach ($authors AS $author) {
-                    // @jpdev - they have name, title (David Raths, Contributing Editor) - should I attempt to parse, or leave verbatium?
-                    $name = trim($author);
-                    $contact = [
-                        'name'  => $name,
-                    ];
-
-                    // need to set first/last name on contacts, calculated field will change name to blank if they are not set
-                    $nameParts = explode(" ", $name);
-                    if (count($nameParts) == 2) {
-                        $contact['firstName'] = $nameParts[0];
-                        $contact['lastName'] = $nameParts[1];
-                    } else {
-                        $contact['firstName'] = "";
-                        $contact['lastName'] = $name;
-                    }
-
-                    $this->importContact($contact);
-                    $legacySource = sprintf('%s_contacts', $this->getKey());
-                    $node->legacy['refs']['authors'][ $legacySource][] = trim($author);
-                }
-            }
+        // Images
+        $primary = $this->resolveDotNotation($nodeArray, 'field_image.und.0');
+        if ($primary) {
+            $fp = file_create_url($primary['uri']);
+            $this->createImage($primary);
+            $node->legacy['refs']['primaryImage']['common'] = $fp;
         }
-
-        // deck
-        // @jpdev - put in root, or in mutations.Magazine
-        $fieldName = $this->getFieldMapName('deck');
-        if (!empty($fieldName)) {
-            $teaser = $this->resolveDotNotation($nodeArray, $fieldName);
-            if (!empty($teaser)) {
-                //$node->deck = $teaser;
-                $node->mutations['Magazine']['deck']= $teaser;
-            }
-        }
-
-        // modified to work on array of image fields
-        $fieldNames = $this->getFieldMapName('images');
-        if (!empty($fieldNames)) {
-            if (!is_array($fieldNames)) $fieldNames = (array) $fieldNames;
-            foreach ($fieldNames AS $fieldName) {
-                if ($debug) var_dump($fieldName);
-                $images = $this->resolveDotNotation($nodeArray, $fieldName);
-                if ($debug) var_dump($images);
-                if (!empty($images)) {
-                    foreach ($images AS $image) {
-                        if ($debug) var_dump($image);
-                        if (0 === (int) $image['fid']) continue;
-
-                        $fp = file_create_url($image['uri']);
-                        if ($debug) var_dump('found images');
-                        if ($debug) var_dump($fp);
-                        $node->legacy['refs']['images']['common'][] = $fp;
-
-                        // add image also
-                        $caption = null;
-                        if (isset($node->field_image_caption)) {
-                            $val = $this->getFieldValue($node->field_image_caption, $node, null);
-                            if (null !== $val) {
-                                $caption = $val['value'];
-                            }
-                        }
-                        if (isset($node->field_image_text)) {
-                            $val = $this->getFieldValue($node->field_image_text, $node, null);
-                            if (null !== $val) {
-                                $caption = $val['value'];
-                            }
-                        }
-                        $this->createImage($image, $caption);
-
-                        if (!isset($node->primaryImage)) {
-                            //$node->legacy['refs']['primaryImage']['common'] = (String) $image['fid'];
-                            $node->legacy['refs']['primaryImage']['common'] = (String) $fp;
-                        }
-                    }
-                }
-            }
-        }
-
-        // added for webinars
-        //$fieldName = $this->getFieldMapName('linkUrl');
-        $redirectSource = sprintf('node/%s', $nodeArray['nid']);
-        $redirectQuery = sprintf("SELECT redirect from {redirect} where source = 'node/%s'", $nodeArray['nid']);
-        $redirectResource = db_query($redirectQuery);
-        foreach ($redirectResource as $redirectRow) {
-            $node->linkUrl = $redirectRow->redirect;
-            $node->linkText = 'Register / View';
-        }
-
-        // added for hci100
-        $fieldName = $this->getFieldMapName('phone');
-        if (!empty($fieldName)) {
-            $phone = $this->resolveDotNotation($nodeArray, $fieldName);
-            if (!empty($phone)) {
-                $node->phone = $phone;
-            }
-        }
-
-        $fieldName = $this->getFieldMapName('city');
-        if (!empty($fieldName)) {
-            // try to parse City, State
-            $city = $this->resolveDotNotation($nodeArray, $fieldName);
-            if (!empty($city)) {
-                $cityParts = explode(",", $city);
-                if (count($cityParts) == 2) {
-                    $node->city = trim($cityParts[0]);
-                    $node->state = trim($cityParts[1]);
-                } else {
-                    $node->city = trim($city);
-                }
-            }
-        }
-
-        $fieldName = $this->getFieldMapName('website');
-        if (!empty($fieldName)) {
-            $website = $this->resolveDotNotation($nodeArray, $fieldName);
-            if (!empty($website)) {
-                $node->website = $website;
-            }
-        }
-
-        // socialLinks returning array
-        $fieldNameArray = $this->getFieldMapName('socialLinks');
-        if (!empty($fieldName)) {
-            $socialLinks = array();
-            foreach ($fieldNameArray AS $fieldName) {
-                $socialData = $this->resolveDotNotation($nodeArray, $fieldName);
-
-                if (empty($socialData)) continue;
-
-                if (strpos($fieldName, 'twitter') !== false) {
-                    $data = [
-                        'provider'  => 'twitter',
-                        'label'     => 'Twitter',
-                        'url'       => $socialData
-                    ];
-                    $socialLinks[] = $data;
-                }
-                if (strpos($fieldName, 'linkedin') !== false) {
-                    $data = [
-                        'provider'  => 'linkedin',
-                        'label'     => 'LinkedIn',
-                        'url'       => $socialData
-                    ];
-                    $socialLinks[] = $data;
-                }
-                if (strpos($fieldName, 'facebook') !== false) {
-                    $data = [
-                        'provider'  => 'facebook',
-                        'label'     => 'Facebook',
-                        'url'       => $socialData
-                    ];
-                    $socialLinks[] = $data;
-                }
-            }
-            if (!empty($socialLinks)) {
-                $node->socialLinks = $socialLinks;
-            }
-        }
-
-        $fieldName = $this->getFieldMapName('rank');
-        if (!empty($fieldName)) {
-            $rank = $this->resolveDotNotation($nodeArray, $fieldName);
-            if (!empty($rank)) {
-                $node->rank = (int) $rank;
-            }
-        }
-
-        $fieldName = $this->getFieldMapName('previousRank');
-        if (!empty($fieldName)) {
-            $previousRank = $this->resolveDotNotation($nodeArray, $fieldName);
-            if (!empty($previousRank)) {
-                $node->previousRank = (int) $previousRank;
-            }
-        }
-
-        $fieldName = $this->getFieldMapName('founded');
-        if (!empty($fieldName)) {
-            $founded = $this->resolveDotNotation($nodeArray, $fieldName);
-            if (!empty($founded)) {
-                $node->founded = $founded;
-            }
-        }
-
-        $fieldName = $this->getFieldMapName('companyType');
-        if (!empty($fieldName)) {
-            $companyType = $this->resolveDotNotation($nodeArray, $fieldName);
-            if (!empty($companyType)) {
-                $node->companyType = $companyType;
-            }
-        }
-
-        $fieldName = $this->getFieldMapName('employees');
-        if (!empty($fieldName)) {
-            $employees = $this->resolveDotNotation($nodeArray, $fieldName);
-            if (!empty($employees)) {
-                $node->employees = $employees;
-            }
-        }
-
-        $fieldName = $this->getFieldMapName('revenueCurrent');
-        if (!empty($fieldName)) {
-            $revenueCurrent = $this->resolveDotNotation($nodeArray, $fieldName);
-            if (!empty($revenueCurrent)) {
-                $node->revenueCurrent = $revenueCurrent;
+        $images = $this->resolveDotNotation($nodeArray, 'field_article_images.und');
+        if (!empty($images)) {
+            foreach ($images as $image) {
+                $fp = file_create_url($image['uri']);
+                $this->createImage($image);
+                $node->legacy['refs']['images']['common'][] = $fp;
             }
         }
 
 
-        $fieldName = $this->getFieldMapName('revenuePrior1');
-        if (!empty($fieldName)) {
-            $revenuePrior1 = $this->resolveDotNotation($nodeArray, $fieldName);
-            if (!empty($revenuePrior1)) {
-                $node->revenuePrior1 = $revenuePrior1;
-            }
-        }
+        // // added for webinars
+        // //$fieldName = $this->getFieldMapName('linkUrl');
+        // $redirectSource = sprintf('node/%s', $nodeArray['nid']);
+        // $redirectQuery = sprintf("SELECT redirect from {redirect} where source = 'node/%s'", $nodeArray['nid']);
+        // $redirectResource = db_query($redirectQuery);
+        // foreach ($redirectResource as $redirectRow) {
+        //     $node->linkUrl = $redirectRow->redirect;
+        //     $node->linkText = 'Register / View';
+        // }
 
-        $fieldName = $this->getFieldMapName('revenuePriorYear1');
-        if (!empty($fieldName)) {
-            $revenuePriorYear1 = $this->resolveDotNotation($nodeArray, $fieldName);
-            if (!empty($revenuePriorYear1)) {
-                $node->revenuePriorYear1 = $revenuePriorYear1;
-            }
-        }
+        // // added for hci100
+        // $fieldName = $this->getFieldMapName('phone');
+        // if (!empty($fieldName)) {
+        //     $phone = $this->resolveDotNotation($nodeArray, $fieldName);
+        //     if (!empty($phone)) {
+        //         $node->phone = $phone;
+        //     }
+        // }
 
-        $fieldName = $this->getFieldMapName('revenuePrior2');
-        if (!empty($fieldName)) {
-            $revenuePrior2 = $this->resolveDotNotation($nodeArray, $fieldName);
-            if (!empty($revenuePrior2)) {
-                $node->revenuePrior2 = $revenuePrior2;
-            }
-        }
+        // $fieldName = $this->getFieldMapName('city');
+        // if (!empty($fieldName)) {
+        //     // try to parse City, State
+        //     $city = $this->resolveDotNotation($nodeArray, $fieldName);
+        //     if (!empty($city)) {
+        //         $cityParts = explode(",", $city);
+        //         if (count($cityParts) == 2) {
+        //             $node->city = trim($cityParts[0]);
+        //             $node->state = trim($cityParts[1]);
+        //         } else {
+        //             $node->city = trim($city);
+        //         }
+        //     }
+        // }
 
-        $fieldName = $this->getFieldMapName('revenuePriorYear2');
-        if (!empty($fieldName)) {
-            $revenuePriorYear2 = $this->resolveDotNotation($nodeArray, $fieldName);
-            if (!empty($revenuePriorYear2)) {
-                $node->revenuePriorYear2 = $revenuePriorYear2;
-            }
-        }
+        // $fieldName = $this->getFieldMapName('website');
+        // if (!empty($fieldName)) {
+        //     $website = $this->resolveDotNotation($nodeArray, $fieldName);
+        //     if (!empty($website)) {
+        //         $node->website = $website;
+        //     }
+        // }
 
-        $fieldName = $this->getFieldMapName('companyExecutives');
-        if (!empty($fieldName)) {
-            $companyExecutives = $this->resolveDotNotation($nodeArray, $fieldName);
-            if (!empty($companyExecutives)) {
-                $node->companyExecutives = $companyExecutives;
-            }
-        }
+        // // socialLinks returning array
+        // $fieldNameArray = $this->getFieldMapName('socialLinks');
+        // if (!empty($fieldName)) {
+        //     $socialLinks = array();
+        //     foreach ($fieldNameArray AS $fieldName) {
+        //         $socialData = $this->resolveDotNotation($nodeArray, $fieldName);
 
-        $fieldName = $this->getFieldMapName('majorRevenue');
-        if (!empty($fieldName)) {
-            $majorRevenue = $this->resolveDotNotation($nodeArray, $fieldName);
-            if (!empty($majorRevenue)) {
-                $node->majorRevenue = $majorRevenue;
-            }
-        }
+        //         if (empty($socialData)) continue;
 
-        $fieldName = $this->getFieldMapName('productCategories');
-        if (!empty($fieldName)) {
-            $productCategories = $this->resolveDotNotation($nodeArray, $fieldName);
-            if (!empty($productCategories)) {
-                $node->productCategories = $productCategories;
-            }
-        }
+        //         if (strpos($fieldName, 'twitter') !== false) {
+        //             $data = [
+        //                 'provider'  => 'twitter',
+        //                 'label'     => 'Twitter',
+        //                 'url'       => $socialData
+        //             ];
+        //             $socialLinks[] = $data;
+        //         }
+        //         if (strpos($fieldName, 'linkedin') !== false) {
+        //             $data = [
+        //                 'provider'  => 'linkedin',
+        //                 'label'     => 'LinkedIn',
+        //                 'url'       => $socialData
+        //             ];
+        //             $socialLinks[] = $data;
+        //         }
+        //         if (strpos($fieldName, 'facebook') !== false) {
+        //             $data = [
+        //                 'provider'  => 'facebook',
+        //                 'label'     => 'Facebook',
+        //                 'url'       => $socialData
+        //             ];
+        //             $socialLinks[] = $data;
+        //         }
+        //     }
+        //     if (!empty($socialLinks)) {
+        //         $node->socialLinks = $socialLinks;
+        //     }
+        // }
 
-        $fieldName = $this->getFieldMapName('marketsServing');
-        if (!empty($fieldName)) {
-            $marketsServing = $this->resolveDotNotation($nodeArray, $fieldName);
-            if (!empty($marketsServing)) {
-                $node->marketsServing = $marketsServing;
-            }
-        }
+        // $fieldName = $this->getFieldMapName('rank');
+        // if (!empty($fieldName)) {
+        //     $rank = $this->resolveDotNotation($nodeArray, $fieldName);
+        //     if (!empty($rank)) {
+        //         $node->rank = (int) $rank;
+        //     }
+        // }
 
-        $oldFields = ['field_image_caption']; // caption used with field_image
-        $newFields = ['_id', 'type', 'legacy', ];
-        foreach ($this->map['structure'] AS $baseFieldName => $drupalFieldNames) {
-            $newFields[] = $baseFieldName;
-            if (!is_array($drupalFieldNames)) $drupalFieldNames = (array)$drupalFieldNames;
+        // $fieldName = $this->getFieldMapName('previousRank');
+        // if (!empty($fieldName)) {
+        //     $previousRank = $this->resolveDotNotation($nodeArray, $fieldName);
+        //     if (!empty($previousRank)) {
+        //         $node->previousRank = (int) $previousRank;
+        //     }
+        // }
 
-            // dot notation drupal fields will remove fromt the root element (body.value will remove body and all children unless body is in the newField list as well)
-            foreach ($drupalFieldNames AS &$drupalFieldName) {
-                $drupalFieldName = explode('.', $drupalFieldName)[0];
-            }
-            $oldFields = array_unique(array_merge($oldFields, $drupalFieldNames));
-        }
-        $removeFields = array_diff($oldFields, $newFields);
-        foreach ($removeFields AS $removeField) {
-            unset($node->$removeField);
-        }
-        $nodeFields = array_keys($nodeArray);
+        // $fieldName = $this->getFieldMapName('founded');
+        // if (!empty($fieldName)) {
+        //     $founded = $this->resolveDotNotation($nodeArray, $fieldName);
+        //     if (!empty($founded)) {
+        //         $node->founded = $founded;
+        //     }
+        // }
 
-        // don't move fields that are in the newField (B4) list
-        $moveFields = array_diff($nodeFields, $newFields);
+        // $fieldName = $this->getFieldMapName('companyType');
+        // if (!empty($fieldName)) {
+        //     $companyType = $this->resolveDotNotation($nodeArray, $fieldName);
+        //     if (!empty($companyType)) {
+        //         $node->companyType = $companyType;
+        //     }
+        // }
 
-        // don't move fields that were sources from the oldField (D7) list
-        $moveFields = array_diff($moveFields, $oldFields);
+        // $fieldName = $this->getFieldMapName('employees');
+        // if (!empty($fieldName)) {
+        //     $employees = $this->resolveDotNotation($nodeArray, $fieldName);
+        //     if (!empty($employees)) {
+        //         $node->employees = $employees;
+        //     }
+        // }
 
-        foreach ($moveFields AS $moveField) {
-            $unsupportedFields[$moveField] = $node->$moveField;
-            unset($node->$moveField);
-        }
-        $node->legacy['unsupportedFields'] = $unsupportedFields;
+        // $fieldName = $this->getFieldMapName('revenueCurrent');
+        // if (!empty($fieldName)) {
+        //     $revenueCurrent = $this->resolveDotNotation($nodeArray, $fieldName);
+        //     if (!empty($revenueCurrent)) {
+        //         $node->revenueCurrent = $revenueCurrent;
+        //     }
+        // }
+
+
+        // $fieldName = $this->getFieldMapName('revenuePrior1');
+        // if (!empty($fieldName)) {
+        //     $revenuePrior1 = $this->resolveDotNotation($nodeArray, $fieldName);
+        //     if (!empty($revenuePrior1)) {
+        //         $node->revenuePrior1 = $revenuePrior1;
+        //     }
+        // }
+
+        // $fieldName = $this->getFieldMapName('revenuePriorYear1');
+        // if (!empty($fieldName)) {
+        //     $revenuePriorYear1 = $this->resolveDotNotation($nodeArray, $fieldName);
+        //     if (!empty($revenuePriorYear1)) {
+        //         $node->revenuePriorYear1 = $revenuePriorYear1;
+        //     }
+        // }
+
+        // $fieldName = $this->getFieldMapName('revenuePrior2');
+        // if (!empty($fieldName)) {
+        //     $revenuePrior2 = $this->resolveDotNotation($nodeArray, $fieldName);
+        //     if (!empty($revenuePrior2)) {
+        //         $node->revenuePrior2 = $revenuePrior2;
+        //     }
+        // }
+
+        // $fieldName = $this->getFieldMapName('revenuePriorYear2');
+        // if (!empty($fieldName)) {
+        //     $revenuePriorYear2 = $this->resolveDotNotation($nodeArray, $fieldName);
+        //     if (!empty($revenuePriorYear2)) {
+        //         $node->revenuePriorYear2 = $revenuePriorYear2;
+        //     }
+        // }
+
+        // $fieldName = $this->getFieldMapName('companyExecutives');
+        // if (!empty($fieldName)) {
+        //     $companyExecutives = $this->resolveDotNotation($nodeArray, $fieldName);
+        //     if (!empty($companyExecutives)) {
+        //         $node->companyExecutives = $companyExecutives;
+        //     }
+        // }
+
+        // $fieldName = $this->getFieldMapName('majorRevenue');
+        // if (!empty($fieldName)) {
+        //     $majorRevenue = $this->resolveDotNotation($nodeArray, $fieldName);
+        //     if (!empty($majorRevenue)) {
+        //         $node->majorRevenue = $majorRevenue;
+        //     }
+        // }
+
+        // $fieldName = $this->getFieldMapName('productCategories');
+        // if (!empty($fieldName)) {
+        //     $productCategories = $this->resolveDotNotation($nodeArray, $fieldName);
+        //     if (!empty($productCategories)) {
+        //         $node->productCategories = $productCategories;
+        //     }
+        // }
+
+        // $fieldName = $this->getFieldMapName('marketsServing');
+        // if (!empty($fieldName)) {
+        //     $marketsServing = $this->resolveDotNotation($nodeArray, $fieldName);
+        //     if (!empty($marketsServing)) {
+        //         $node->marketsServing = $marketsServing;
+        //     }
+        // }
+
+        // $oldFields = ['field_image_caption']; // caption used with field_image
+        // $newFields = ['_id', 'type', 'legacy', ];
+        // foreach ($this->map['structure'] AS $baseFieldName => $drupalFieldNames) {
+        //     $newFields[] = $baseFieldName;
+        //     if (!is_array($drupalFieldNames)) $drupalFieldNames = (array)$drupalFieldNames;
+
+        //     // dot notation drupal fields will remove fromt the root element (body.value will remove body and all children unless body is in the newField list as well)
+        //     foreach ($drupalFieldNames AS &$drupalFieldName) {
+        //         $drupalFieldName = explode('.', $drupalFieldName)[0];
+        //     }
+        //     $oldFields = array_unique(array_merge($oldFields, $drupalFieldNames));
+        // }
+        // $removeFields = array_diff($oldFields, $newFields);
+        // foreach ($removeFields AS $removeField) {
+        //     unset($node->$removeField);
+        // }
+        // $nodeFields = array_keys($nodeArray);
+
+        // // don't move fields that are in the newField (B4) list
+        // $moveFields = array_diff($nodeFields, $newFields);
+
+        // // don't move fields that were sources from the oldField (D7) list
+        // $moveFields = array_diff($moveFields, $oldFields);
+
+        // foreach ($moveFields AS $moveField) {
+        //     $unsupportedFields[$moveField] = $node->$moveField;
+        //     unset($node->$moveField);
+        // }
+        // $node->legacy['unsupportedFields'] = $unsupportedFields;
 
     }
 
@@ -822,31 +729,29 @@ class ExportD75AW extends AbstractExport
      */
     protected function createImage(array $img, $caption = null)
     {
-        if ((int) $img['fid'] === 0) {
-            return;
-        }
+        $id = (int) $img['fid'];
+        if ($id === 0) return;
 
-        $filePath = file_create_url($img['uri']);
-
-        $collection = $this->database->selectCollection('Image');
+        $collection = method_exists($this->database, 'selectCollection')
+            ? $this->database->selectCollection('Image')
+            : $this->database->Image;
         $kv = [
-            '_id'       => (int) $img['fid'],
+            '_id'       => $id,
             'type'      => 'Image',
             'name'      => $img['filename'],
             'fileName'  => $img['filename'],
             'source'    => [
-                'location'  => $filePath,
+                'location'  => file_create_url($img['uri']),
                 'name'      => $img['filename'],
             ],
+            'caption'   => $img['title'],
+            'alt'       => $img['alt'],
             'legacy'    => [
-                'id'      => $filePath,
+                'id'        => $id,
                 'source'    => sprintf('common'),
                 'created'   => date('c', $img['timestamp']),
             ]
         ];
-        if (null !== $caption) {
-            $kv['caption'] = $caption;
-        }
 
         try {
             return method_exists($collection, 'insert')
@@ -990,13 +895,11 @@ class ExportD75AW extends AbstractExport
                 $title = str_replace('Automation World - ', '', $title);
 
                 // Try and regex parse out ".*\w{3} \d{4}" or similar to get IIOT suppliement asdfasdf november 2018
+                if (\preg_match('/^.*?([\w]{1,}\s[\d]{2,})/i', $title, $matches)) $title = $matches[1];
 
                 // try to do mailDate again
                 $mailDate = strtotime($title);
-                if(!$mailDate) {
-                    $this->writeln(sprintf('Unable to parse mailDate from title %s.', $node->title));
-                    throw new \InvalidArgumentException();
-                }
+                if(!$mailDate) $this->writeln(sprintf('Unable to parse mailDate from title %s.', $node->title));
 
             }
             $mailDate = new DateTime(date('c', $mailDate), $tz);

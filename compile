@@ -19,9 +19,8 @@ $Iterator = new RecursiveIteratorIterator($dir);
 $Regex = new RegexIterator($Iterator, '/^.+\.php$/i', RecursiveRegexIterator::GET_MATCH);
 
 foreach ($Regex as $key => $value) {
-    if (stripos($key, 'bootstrap.php') !== false) {
-        continue;
-    }
+    if (stripos($key, 'tests') !== false) continue;
+    if (stripos($key, 'Tests') !== false) continue;
     $file = new SplFileInfo($key);
     $path = strtr(str_replace($root.'/', '', $file->getRealPath()), '\\', '/');
     $content = file_get_contents($file);

@@ -2,7 +2,8 @@
     "name": "cygnusb2b/base-drush-export",
     "description": "A PHAR project to export data to base-platform format from Drupal",
     "require": {
-        "mongodb/mongodb": "^1.4"
+        "mongodb/mongodb": "^1.4",
+        "symfony/console": "^4.3"
     },
     "autoload": {
         "psr-0": {

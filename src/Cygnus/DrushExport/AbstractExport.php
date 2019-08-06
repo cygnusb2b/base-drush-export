@@ -5,12 +5,14 @@ namespace Cygnus\DrushExport;
 use InvalidArgumentException;
 use DateTimeZone;
 use DateTime;
+use Symfony\Component\Console\Output\ConsoleOutput;
 
 /**
  * Wrapper for core logic in Drupal imports
  */
 abstract class AbstractExport
 {
+    use Traits\IO;
 
     // @jp - tmp to debug a specific node on new data sets
     public $debugNode = false;
@@ -60,18 +62,10 @@ abstract class AbstractExport
         }
         $this->map = $this->configs[$this->key];
 
-        if (class_exists('MongoClient')) {
-            $this->mongo = new \MongoClient($dsn);
-            $db = $this->mongo->selectDb($this->map['database']);
-            $db->drop();
-            $this->database = $this->mongo->selectDb($this->map['database']);
-        } else {
-            $this->mongo = new \MongoDB\Client($dsn);
-            $db = $this->mongo->{$this->map['database']};
-            $db->drop();
-            echo "Dropped database " . $this->map['database'];
-            $this->database = $this->mongo->{$this->map['database']};
-        }
+        $this->dbal = new DBAL($dsn);
+        $this->database = $this->map['database'];
+
+        $this->output = new ConsoleOutput();
     }
 
     /**
@@ -79,11 +73,11 @@ abstract class AbstractExport
      */
     public function execute()
     {
-        $this->writeln(sprintf('Starting import for %s', $this->key), true, true);
+        $this->writeln(sprintf('Starting import for %s', $this->key));
 
         $this->importUsers();
-        $this->importTaxonomies();
-        $this->importNodes();
+        // $this->importTaxonomies();
+        // $this->importNodes();
 
         $this->writeln('Import complete.', true, true);
     }
@@ -96,65 +90,46 @@ abstract class AbstractExport
     }
 
     /**
-     * Handles output sanitization.
-     *
-     * @final
-     * @access protected
-     *
-     * @param string $text The text to output
-     * @param boolean $breakAfter Add a linebreak after the text
-     * @param boolean $breakBefore Add a linebreak before the text
-     */
-    final protected function writeln($text, $breakAfter = false, $breakBefore = false)
-    {
-        // Enforce a line break on all lines.
-        $text = sprintf("%s\r\n", $text);
-
-        if (true === $breakAfter) {
-            $text = sprintf("%s\r\n", $text);
-        }
-
-        if (true == $breakBefore) {
-            $text = sprintf("\r\n%s", $text);
-        }
-        echo $text;
-    }
-
-    /**
      * Iterates over users and exports them.
      */
     protected function importUsers()
     {
-        $this->writeln('Importing Users.', false, true);
-        $users = $this->loadUsers();
+        $counter = function() {
+            $r = db_query('select count(uid) from {users}');
+            return (int) $r->fetchCol()[0];
+        };
 
-        $collection = method_exists($this->database, 'selectCollection')
-            ? $this->database->selectCollection('User')
-            : $this->database->User;
-        $formatted = [];
-        foreach ($users as $user) {
-            if ((int) $user->uid === 0) {
-                continue;
-            }
-            $kv = [
-                '_id'       => (int) $user->uid,
-                'username'  => $user->name,
-                'password'  => $user->pass,
-                'email'     => $user->mail
+        $retriever = function($limit, $skip) {
+            $resource = db_query(sprintf('select uid from {users} order by uid asc limit %s, %s', $skip, $limit));
+            $users = $this->getObjects($resource, 'user');
+            return $users;
+        };
+
+        $modifier = function($user) {
+            $uid = (int) $user->uid;
+            if ($uid === 0) return;
+            return [
+                'filter'    => [ '_id' => $uid ],
+                'update'    => [
+                    '$set'  => [
+                        'username'  => $user->name,
+                        'email'     => $user->mail,
+                        'firstName' => $user->field_firstname['und'][0]['value'],
+                        'lastName'  => $user->field_lastname['und'][0]['value'],
+                        'legacy'    => [
+                            'id'        => (string) $uid,
+                            'source'    => 'aw_user',
+                        ],
+                    ]
+                ],
             ];
-            if (!empty($user->uid)) {
-                $kv['legacy']['id'] = (String) $user->uid;
-                $kv['legacy']['source'] = sprintf('%s_user', $this->getKey());
-            }
-            $formatted[] = $kv;
-        }
+        };
 
-        if (!empty($formatted)) {
-            $this->writeln(sprintf('Users: Inserting %s users.', count($formatted)));
-            return method_exists($collection, 'batchInsert')
-                ? $collection->batchInsert($formatted)
-                : $collection->insertMany($formatted);
-        }
+        $persister = function($ops) {
+            $this->dbal->batchUpsert($this->database, 'User', $ops);
+        };
+
+        $this->loop($counter, $retriever, $modifier, $persister, 'User');
     }
 
     /**
@@ -193,8 +168,8 @@ abstract class AbstractExport
     {
         $this->writeln('Importing Nodes.', false, true);
 
-        $this->importWebsiteSectionNodes();
-        $this->importMagazineIssueNodes();
+        // $this->importWebsiteSectionNodes();
+        // $this->importMagazineIssueNodes();
         $this->importContentNodes();
 
     }
@@ -786,7 +761,9 @@ abstract class AbstractExport
             $percentage = ($total == 0) ? 0 : round($inserted / $total * 100, 2);
 
             if (!empty($formatted)) {
-                $collection->batchInsert($formatted);
+                $result = method_exists($collection, 'batchInsert')
+                    ? $collection->batchInsert($formatted)
+                    : $collection->insertMany($formatted);
             }
 
             $this->writeln(sprintf('Nodes: Inserted %s/%s documents (%s%%).', str_pad($inserted, strlen($total), ' ', STR_PAD_LEFT), $total, $percentage));
