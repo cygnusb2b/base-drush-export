@@ -676,7 +676,7 @@ abstract class AbstractExport
         $this->outdent();
     }
 
-    protected function importMagazineIssueTypeNodes($type, $limit = 100)
+    protected function importMagazineIssueTypeNodes($type, $limit = 200)
     {
         // @todo update
         throw new \BadMethodCallException('This method has not yet been rewritten.');
@@ -736,7 +736,7 @@ abstract class AbstractExport
         }
     }
 
-    final protected function importContentNodes($limit = 100)
+    final protected function importContentNodes($limit = 200)
     {
         $this->writeln('Importing Content Nodes.', false, true);
         $this->indent();
@@ -760,7 +760,7 @@ abstract class AbstractExport
     /**
      * Imports content nodes of the specified type
      */
-    abstract protected function importContentTypeNodes($type, $limit = 100);
+    abstract protected function importContentTypeNodes($type, $limit = 200);
 
     // storage of legacy values pre-drush
     public function convertLegacy(&$node)

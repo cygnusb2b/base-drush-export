@@ -55,10 +55,6 @@ class ExportD75AW extends AbstractExport
                 'around_the_world'  => 'Website\\Content\\Article',            // Around the world section/blog
 
                 'article' => 'Website\\Content\\Article',                      // Make all Articles by default
-                // Sub types! @todo remap type based on sub type taxonomy
-                // 'article__news' => 'Website\\Content\\News',                // Custom sub type mappings
-                // 'article__perspective'  => 'Website\\Content\\Blog',
-                // 'article__column'  => 'Website\\Content\\Blog',
 
                 'page'  => 'Website\\Content\\Page',
                 'blog'  => 'Website\\Content\\Blog',
@@ -94,21 +90,62 @@ class ExportD75AW extends AbstractExport
             'database'          => 'drupal_pmmi_aw',
             'structure' =>  [
                 'stripFields'   => [
-                    // 'vid',
-                    // 'log',
-                    // 'tnid',
-                    // 'cid', // comment id - prob not needed but search data to confirm
-                    // 'translate',
-                    // 'print_html_display',
-                    // 'print_html_display_comment',
-                    // 'print_html_display_urllist',
-                    // 'last_comment_uid',
-                    // 'last_comment_name',
-                    // 'last_comment_timestamp',
-                    // 'revision_timestamp', // looks to be same as 'changed' which we are using
-                    // 'language' // use for determining path to text content, need to keep?
-                    //'comment','promote, 'sticky','premium_content','comment_count','picture','data'  // other fields I see but leaving for now
+                    // These fields will be removed from nodes before being written to mongo
+                    'vid',
+                    'log',
+                    'uuid',
+                    'tnid',
+                    'cid',                          // comment id
+                    'translate',
+                    'print_html_display',
+                    'print_html_display_comment',
+                    'print_html_display_urllist',
+                    'last_comment_uid',
+                    'last_comment_name',
+                    'last_comment_timestamp',
+                    'revision_timestamp',           // looks to be same as 'changed' which we are using
+                    'revision_uid',
+                    'language',                     // language value, (und default)
+                    'comment',
+                    'comment_count',
+                    'promote',
+                    'sticky',
+                    'vuuid',
+                    'rdf_mapping',
+                    'path',
+                    'metatags',
+                    'data',
+                    'picture',
+                    //'premium_content','comment_count','picture','data'  // other fields I see but leaving for now
                     //'moderate','format','feed','field_priority','field_leagcy_id','rdf_mapping','metatags','field_legacy_article_id');  // fields in old code, but not seen so far in hci
+                    'field_360_multi_upload',
+                    'field_360_images_reverse',
+                    'field_360_magic_plugin',
+                    'field_360_magic_plugin_columns',
+                    'field_360_magic_plugin_rows',
+                    'field_360_images',
+                    'field_gallery_360_field_location',
+                    'field_allterms',   // @todo handle in taxonomy segment
+                    'field_related',
+                    'field_pop_up_registration',
+                    'field_joomla_id',
+                    'field_accela_id',
+                    'field_duplicate',
+
+                    // Fields that may be important later, but exist in `legacy.raw`
+                    'field_viddler_id',
+                    'field_sponsor_expiration',
+
+                    // Renamed fields, remove to cleanup
+                    'nid',
+                    'uid',
+                    'title',
+                    'field_deckhead',
+                    'field_image',
+                    'field_article_images',
+                    'changed',
+                    'field_byline',
+                    'field_author_title',
                 ],
                 '_id'       => 'nid',
                 'name'      => 'title',
@@ -236,7 +273,7 @@ class ExportD75AW extends AbstractExport
     /**
      * {@inheritdoc}
      */
-    protected function queryNodes(array $types = [], $limit = 100, $skip = 0)
+    protected function queryNodes(array $types = [], $limit = 200, $skip = 0)
     {
         $types = $this->formatValues($types);
         $inQuery = implode(',', array_fill(0, count($types), '?'));
@@ -415,7 +452,7 @@ class ExportD75AW extends AbstractExport
     /**
      * {@inheritDoc}
      */
-    protected function importContentTypeNodes($type, $limit = 100)
+    protected function importContentTypeNodes($type, $limit = 200)
     {
         $counter = function() use ($type) {
             return $this->countNodes([$type]);
@@ -450,7 +487,7 @@ class ExportD75AW extends AbstractExport
     /**
      * {@inheritDoc}
      */
-    protected function importMagazineIssueTypeNodes($type, $limit = 100)
+    protected function importMagazineIssueTypeNodes($type, $limit = 200)
     {
         $tz = new DateTimeZone('America/Chicago');
 
@@ -469,8 +506,8 @@ class ExportD75AW extends AbstractExport
             $set = [
                 '_id'               => (int) $node->nid,
                 'name'              => $node->title,
-                'created'           => $node->created,
-                'updated'           => $node->changed,
+                'created'           => (int) $node->created,
+                'updated'           => (int) $node->changed,
                 'status'            => (int) $node->status,
                 'legacy'            => [
                     'id'                => (string) $node->nid,
@@ -563,15 +600,21 @@ class ExportD75AW extends AbstractExport
         $node->legacy['refs']['updatedBy']['aw_user'] = $node->revision_uid;
 
         $node->created = (int) $node->created;
-        $node->updated = (int) $node->updated;
+        $node->updated = (int) $node->changed;
         $node->published = (int) $node->created;
 
         // Redirects
         $redirects = &$node->mutations['Website']['redirects'];
         $redirects[] = sprintf('node/%s', $node->_id);
-        $redirects[] = drupal_get_path_alias(sprintf('node/%s', $node->_id));
+
+        $alias = drupal_get_path_alias(sprintf('node/%s', $node->_id));
+        if ($node->type === 'Page') {
+            $node->mutations['Website']['alias'] = $alias;
+        } else {
+            $redirects[] = $alias;
+        }
         $q = sprintf("SELECT source from {redirect} where source = 'node/%s'", $node->nid);
-        foreach (db_query($q) as $r) $redirects[] = $r['source'];
+        foreach (db_query($q) as $r) $redirects[] = $r->source;
 
         // body
         $body = $this->resolveDotNotation($nodeArray, 'body.und.0.value');
@@ -610,6 +653,45 @@ class ExportD75AW extends AbstractExport
             }
         }
 
+        $images = $this->resolveDotNotation($nodeArray, 'field_360_multi_upload.und');
+        if (!empty($images)) {
+            foreach ($images as $image) {
+                $fp = file_create_url($image['uri']);
+                $this->createImage($image);
+                $node->legacy['refs']['images']['360'][] = $fp;
+            }
+        }
+
+        $companies = $this->resolveDotNotation($nodeArray, 'field_companies.und');
+        if (!empty($companies)) {
+            foreach ($companies as $ref) {
+                $node->legacy['refs']['companies'][] = $ref['nid'];
+            }
+        }
+        unset($node->field_companies);
+
+        // Taxonomy
+        $taxFields = ['coverage', 'source_type', 'coverage_type', 'column_type', 'subtype'];
+        // @todo check field_term_vocab, field_term_vocab_primary_industry, field_allterms
+        foreach ($taxFields as $type) {
+            $refs = $this->resolveDotNotation($nodeArray, sprintf('field_term_%s.und', $type));
+            if ($refs) {
+                foreach ($refs as $ref) {
+                    $id = (int) $ref['tid'];
+                    $node->legacy['refs']['taxonomy'][] = [ '_id' => $id, 'type'=> $type ];
+                }
+            }
+            unset($node->{sprintf('field_term_%s', $type)});
+        }
+
+        // Related To
+        $relatedTo = $this->resolveDotNotation($nodeArray, 'field_related.und');
+        if (!empty($relatedTo)) {
+            foreach ($relatedTo as $ref) {
+                $node->legacy['refs']['relatedTo'][] = $ref['nid'];
+            }
+        }
+        unset($node->field_related);
 
         // // added for webinars
         // //$fieldName = $this->getFieldMapName('linkUrl');
@@ -834,7 +916,7 @@ class ExportD75AW extends AbstractExport
         //     unset($node->$moveField);
         // }
         // $node->legacy['unsupportedFields'] = $unsupportedFields;
-
+        $this->removeCrapFields($node);
     }
 
 
@@ -887,7 +969,7 @@ class ExportD75AW extends AbstractExport
      */
     protected function importTaxonomy($vocab)
     {
-        $limit = 100;
+        $limit = 200;
         $terms = taxonomy_get_tree($vocab->vid);
         $count = count($terms);
         $terms = array_chunk($terms, $limit);
@@ -945,17 +1027,12 @@ class ExportD75AW extends AbstractExport
      */
     protected function importContact($contact)
     {
-        $kvs = [
-            'name'          => $contact['name'],
-            'type'          => 'Contact',
-            'legacy'        => [
-                'id'            => $contact['name'],
-                'source'        => sprintf('%s_contacts', $this->getKey())
-            ]
-        ];
+        $contact['type'] = 'Contact';
+        $contact['name'] = sprintf('%s %s', $contact['firstName'], $contact['lastName']);
+        $contact['legacy'] = ['id' => $contact['name'], 'source' => 'aw_contacts'];
 
         $filter = ['legacy.id' => $contact['name']];
-        $update = ['$set' => $kvs];
+        $update = ['$set' => $contact];
         return $this->dbal->upsert($this->database, 'Content', $filter, $update);
     }
 
