@@ -151,6 +151,8 @@ class ExportD75AW extends AbstractExport
                     'field_sponsor_links',
                     'field_sponsor_logo',
                     'field_stage_one_form',
+                    'field_vocab_primary_industry',
+                    'field_vocab_primary',
 
                     'field_waywire_playlist_id',
                     'field_waywire_tag',
@@ -162,6 +164,7 @@ class ExportD75AW extends AbstractExport
                     'field_crosspost_to_pfw',
                     'field_reporting_from',
                     'webform',
+                    'field_sales_reps', // no data
 
                     // Fields that may be important later, but exist in `legacy.raw`
                     'field_viddler_id',
@@ -175,11 +178,15 @@ class ExportD75AW extends AbstractExport
                     'field_pullquote',
                     'field_top_copy',
                     'field_sub_title',
+                    'field_app_more_information_link',
+                    'field_application_case_history',
+                    'field_platforms_os',
+                    'field_video_resources', // Exist only on apps, part of the custom data presentation
 
                     'field_issue_date', // Issue date + page num appear to be references to print scheduling
                     'field_page_num',   // but don't contain enough data to map.
 
-                    // 'field_video_resources', // Exist only on apps, part of the custom data presentation
+
                     // 'field_wir_sponsor',
                     'field_youtube_uploads_id',
                     // 'field_youtube_username',
@@ -626,6 +633,17 @@ class ExportD75AW extends AbstractExport
     }
 
     protected $term_cache = [];
+    protected $vocab_cache = [];
+
+    protected function loadVocabMachineName($vid)
+    {
+        $id = (int) $vid;
+        if (!isset($this->vocab_cache[$id])) {
+            $vocab = taxonomy_vocabulary_load($id);
+            $this->vocab_cache[$id] = $vocab->machine_name;
+        }
+        return $this->vocab_cache[$id];
+    }
 
     /**
      * {@inheritdoc}
@@ -745,7 +763,7 @@ class ExportD75AW extends AbstractExport
         unset($node->field_companies);
 
         // Taxonomy
-        $taxFields = ['coverage', 'source_type', 'coverage_type', 'column_type', 'subtype'];
+        $taxFields = ['coverage', 'source_type', 'coverage_type', 'column_type', 'subtype', 'company_type'];
         // @todo check field_term_vocab, field_term_vocab_primary_industry, field_allterms
         foreach ($taxFields as $type) {
             $refs = $this->resolveDotNotation($nodeArray, sprintf('field_term_%s.und', $type));
@@ -762,6 +780,19 @@ class ExportD75AW extends AbstractExport
             }
             unset($node->{sprintf('field_term_%s', $type)});
         }
+
+        $allTerms = $this->resolveDotNotation($nodeArray, 'field_allterms.und');
+        if (!empty($allTerms)) {
+            foreach ($allTerms as $ref) {
+                $node->legacy['refs']['taxonomy'][] = [
+                    '$ref'  => 'Taxonomy',
+                    '$id'   =>  (int) $ref['tid'],
+                    '$db'   => 'drupal_pmmi_aw',
+                    'type'  => $this->loadVocabMachineName($ref['vid']),
+                ];
+            }
+        }
+        unset($node->field_allterms);
 
         // Related To
         $relatedTo = $this->resolveDotNotation($nodeArray, 'field_related.und');
@@ -813,7 +844,24 @@ class ExportD75AW extends AbstractExport
         unset($node->field_blockquote);
 
         // Podcasts
-        // field_sub_podcasts Podcast MP3 reference
+        $podcast = $this->resolveDotNotation($nodeArray, 'field_podcast.und');
+        if ($podcast) {
+            $podcast['_uri'] = file_create_url($podcast['uri']);
+            $node->legacy['refs']['files'][] = $podcast;
+        }
+        unset($node->field_podcast);
+
+        // Some podcasts support `sub podcasts` -- additional files/tracks uploaded to the podcast. Base won't
+        unset($node->field_sub_podcasts);
+
+
+        // News
+        // field_link.und.{title,url} link to news source -- embed in content body?
+        $company = $this->resolveDotNotation($nodeArray, 'field_wir_sponsor.und.target_id');
+        if ($company) {
+            $node->legacy['refs']['company'] = (int) $company;
+        }
+        unset($node->field_wir_sponsor);
 
         // Videos
         // field_white_paper // Exist on Videos, contain youtube links??
@@ -829,18 +877,41 @@ class ExportD75AW extends AbstractExport
         // Apps (Product)
         // field_app_more_information_link  // Array of url/link text
         // field_application_case_history   // node refernce
-        // field_platforms_os   // arraya of value/revids --- match taxonomy?
-        // field_video_resources', // Exist only on apps, part of the custom data presentation?
+        // field_platforms_os               // arraya of value/revids --- match taxonomy?
+        // field_video_resources',          // Exist only on apps, part of the custom data presentation?
 
         // @todo Playbook support
         //  field_expert, field_sponsor (array of values and revision ids?)
         //  field_sub_title, field_playbook_name, field_playbook_pdf, field_disclaimer
 
         // Companies
-        // field_youtube_username // Convert to socialmedia link
-        // field_sales_reps
-        // field_logo
-        // field_link   // convert to website
+        $youtube = $this->resolveDotNotation($nodeArray, 'field_youtube_username.und.value');
+        if ($youtube) $node->socialLinks[] = [
+            'provider'  => 'youtube',
+            'label'     => 'Youtube',
+            'url'       => sprintf('https://youtube.com/%s', $youtube)
+        ];
+
+        $logo = $this->resolveDotNotation($nodeArray, 'field_logo.und');
+        if ($logo) {
+            $fp = file_create_url($logo['uri']);
+            $this->createImage($logo);
+            $node->legacy['refs']['logo'][] = $fp;
+        }
+
+        $link = $this->resolveDotNotation($nodeArray, 'field_link.und.url');
+        if ($link) $node->website = $link;
+
+        // Leadership Session
+        $tid = $this->resolveDotNotation($nodeArray, 'field_ld_session.und.tid');
+        if ($tid) $node->legacy['refs']['taxonomy'][] = [
+            '$ref'  => 'Taxonomy',
+            '$id'   => (int) $tid,
+            '$db'   => 'drupal_pmmi_aw',
+            'type'  => 'leadership_session',
+        ];
+        unset($node->field_ld_session);
+
 
 
 
