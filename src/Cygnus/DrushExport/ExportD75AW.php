@@ -4,6 +4,7 @@ namespace Cygnus\DrushExport;
 
 use DateTimeZone;
 use DateTime;
+use MongoDB\BSON\UTCDateTime;
 
 /**
  * Provides support for exporting from Drupal 7.5x
@@ -124,6 +125,7 @@ class ExportD75AW extends AbstractExport
                     'field_360_magic_plugin_columns',
                     'field_360_magic_plugin_rows',
                     'field_360_images',
+                    'field_360_fc_large',
                     'field_gallery_360_field_location',
                     'field_allterms',   // @todo handle in taxonomy segment
                     'field_related',
@@ -131,10 +133,57 @@ class ExportD75AW extends AbstractExport
                     'field_joomla_id',
                     'field_accela_id',
                     'field_duplicate',
+                    'field_accelaworks_billcode',
+                    'field_article_length',
+                    'field_app_sponsor_news',
+                    'field_brand_override',
+                    'field_master_accelaworks_id',
+                    'field_master_leadworks_id',
+                    'field_form_header',
+
+                    'field_post_launch_banner',
+                    'field_pre_launch_banner',
+                    'field_promoted',
+                    'field_show_site_logo',
+                    'field_silverpop_program_id',
+                    'field_smg_pop_viddler',
+                    'field_social_media_watch',
+                    'field_sponsor_links',
+                    'field_sponsor_logo',
+                    'field_stage_one_form',
+
+                    'field_waywire_playlist_id',
+                    'field_waywire_tag',
+                    'field_waywire_video',
+                    'field_webtracking_name',
+                    'field_updated_on',
+                    'field_top_copy',
+                    'field_legacy',
+                    'field_crosspost_to_pfw',
+                    'field_reporting_from',
+                    'webform',
 
                     // Fields that may be important later, but exist in `legacy.raw`
                     'field_viddler_id',
                     'field_sponsor_expiration',
+                    'field_omeda_behavior_ids',
+                    'field_omeda_deployment_type_ids',
+                    'field_omeda_download_attr_id',
+                    'field_omeda_product_ids',
+                    'field_omeda_promo_code',
+                    'field_pull_quote',
+                    'field_pullquote',
+                    'field_top_copy',
+                    'field_sub_title',
+
+                    'field_issue_date', // Issue date + page num appear to be references to print scheduling
+                    'field_page_num',   // but don't contain enough data to map.
+
+                    // 'field_video_resources', // Exist only on apps, part of the custom data presentation
+                    // 'field_wir_sponsor',
+                    'field_youtube_uploads_id',
+                    // 'field_youtube_username',
+                    'field_youtube_username_override',
 
                     // Renamed fields, remove to cleanup
                     'nid',
@@ -146,6 +195,9 @@ class ExportD75AW extends AbstractExport
                     'changed',
                     'field_byline',
                     'field_author_title',
+                    // 'field_sub_podcasts',
+                    // 'field_whitepaper',
+                    // 'field_white_paper',     // Exist on Videos, contain youtube links??
                 ],
                 '_id'       => 'nid',
                 'name'      => 'title',
@@ -470,6 +522,12 @@ class ExportD75AW extends AbstractExport
             $this->convertScheduling($node);
             $this->convertFields($node);
             $set = json_decode(json_encode($node, 512), true);
+            $dateFields = ['created', 'updated', 'published', 'unpublished'];
+            foreach ($dateFields as $field) {
+                if (isset($set[$field])) {
+                    $set[$field] = new UTCDateTime((int) $set[$field] * 1000);
+                }
+            }
             return [
                 'filter'    => [ '_id'  => $nid ],
                 'update'    => [ '$set' => $set ],
@@ -603,6 +661,10 @@ class ExportD75AW extends AbstractExport
         $node->updated = (int) $node->changed;
         $node->published = (int) $node->created;
 
+        $unpublished = $this->resolveDotNotation($nodeArray, 'field_expiration_date.und.value');
+        if ($unpublished) $node->unpublished = (int) $unpublished;
+        unset($node->field_expiration_date);
+
         // Redirects
         $redirects = &$node->mutations['Website']['redirects'];
         $redirects[] = sprintf('node/%s', $node->_id);
@@ -618,7 +680,10 @@ class ExportD75AW extends AbstractExport
 
         // body
         $body = $this->resolveDotNotation($nodeArray, 'body.und.0.value');
-        $node->body = empty($body) ? null : $body;
+        $node->body = $body;
+        if (empty($body)) {
+            unset($node->body);
+        }
 
         // teaser
         $teaser = $this->resolveDotNotation($nodeArray, 'field_deckhead.und.0.value');
@@ -644,6 +709,15 @@ class ExportD75AW extends AbstractExport
             $this->createImage($primary);
             $node->legacy['refs']['primaryImage']['common'] = $fp;
         }
+
+        $cover = $this->resolveDotNotation($nodeArray, 'field_cover_image.und.0');
+        if ($cover) {
+            $fp = file_create_url($cover['uri']);
+            $this->createImage($cover);
+            $key = $primary ? 'cover' : 'common';
+            $node->legacy['refs']['primaryImage'][$key] = $fp;
+        }
+
         $images = $this->resolveDotNotation($nodeArray, 'field_article_images.und');
         if (!empty($images)) {
             foreach ($images as $image) {
@@ -678,7 +752,12 @@ class ExportD75AW extends AbstractExport
             if ($refs) {
                 foreach ($refs as $ref) {
                     $id = (int) $ref['tid'];
-                    $node->legacy['refs']['taxonomy'][] = [ '_id' => $id, 'type'=> $type ];
+                    $node->legacy['refs']['taxonomy'][] = [
+                        '$ref'  => 'Taxonomy',
+                        '$id'   => $id,
+                        '$db'   => 'drupal_pmmi_aw',
+                        'type'  => $type
+                    ];
                 }
             }
             unset($node->{sprintf('field_term_%s', $type)});
@@ -693,199 +772,79 @@ class ExportD75AW extends AbstractExport
         }
         unset($node->field_related);
 
-        // // added for webinars
-        // //$fieldName = $this->getFieldMapName('linkUrl');
-        // $redirectSource = sprintf('node/%s', $nodeArray['nid']);
-        // $redirectQuery = sprintf("SELECT redirect from {redirect} where source = 'node/%s'", $nodeArray['nid']);
-        // $redirectResource = db_query($redirectQuery);
-        // foreach ($redirectResource as $redirectRow) {
-        //     $node->linkUrl = $redirectRow->redirect;
-        //     $node->linkText = 'Register / View';
-        // }
+        // Address data
+        $address1 = $this->resolveDotNotation($nodeArray, 'field_address1.und.value');
+        if ($address1) $node->address1 = $address1;
+        unset($node->field_address1);
 
-        // // added for hci100
-        // $fieldName = $this->getFieldMapName('phone');
-        // if (!empty($fieldName)) {
-        //     $phone = $this->resolveDotNotation($nodeArray, $fieldName);
-        //     if (!empty($phone)) {
-        //         $node->phone = $phone;
-        //     }
-        // }
+        $address2 = $this->resolveDotNotation($nodeArray, 'field_address2.und.value');
+        if ($address2) $node->address1 = $address2;
+        unset($node->field_address2);
 
-        // $fieldName = $this->getFieldMapName('city');
-        // if (!empty($fieldName)) {
-        //     // try to parse City, State
-        //     $city = $this->resolveDotNotation($nodeArray, $fieldName);
-        //     if (!empty($city)) {
-        //         $cityParts = explode(",", $city);
-        //         if (count($cityParts) == 2) {
-        //             $node->city = trim($cityParts[0]);
-        //             $node->state = trim($cityParts[1]);
-        //         } else {
-        //             $node->city = trim($city);
-        //         }
-        //     }
-        // }
+        $city = $this->resolveDotNotation($nodeArray, 'field_city.und.value');
+        if ($city) $node->city = $city;
+        unset($node->field_city);
 
-        // $fieldName = $this->getFieldMapName('website');
-        // if (!empty($fieldName)) {
-        //     $website = $this->resolveDotNotation($nodeArray, $fieldName);
-        //     if (!empty($website)) {
-        //         $node->website = $website;
-        //     }
-        // }
+        $country = $this->resolveDotNotation($nodeArray, 'field_country.und.value');
+        if ($country) $node->country = $country;
+        unset($node->field_country);
 
-        // // socialLinks returning array
-        // $fieldNameArray = $this->getFieldMapName('socialLinks');
-        // if (!empty($fieldName)) {
-        //     $socialLinks = array();
-        //     foreach ($fieldNameArray AS $fieldName) {
-        //         $socialData = $this->resolveDotNotation($nodeArray, $fieldName);
+        $zip = $this->resolveDotNotation($nodeArray, 'field_zipcode.und.value');
+        if ($zip) $node->zip = $zip;
+        unset($node->field_zipcode);
 
-        //         if (empty($socialData)) continue;
+        $state = $this->resolveDotNotation($nodeArray, 'field_state.und.value');
+        if ($state) $node->state = $state;
+        unset($node->field_state);
 
-        //         if (strpos($fieldName, 'twitter') !== false) {
-        //             $data = [
-        //                 'provider'  => 'twitter',
-        //                 'label'     => 'Twitter',
-        //                 'url'       => $socialData
-        //             ];
-        //             $socialLinks[] = $data;
-        //         }
-        //         if (strpos($fieldName, 'linkedin') !== false) {
-        //             $data = [
-        //                 'provider'  => 'linkedin',
-        //                 'label'     => 'LinkedIn',
-        //                 'url'       => $socialData
-        //             ];
-        //             $socialLinks[] = $data;
-        //         }
-        //         if (strpos($fieldName, 'facebook') !== false) {
-        //             $data = [
-        //                 'provider'  => 'facebook',
-        //                 'label'     => 'Facebook',
-        //                 'url'       => $socialData
-        //             ];
-        //             $socialLinks[] = $data;
-        //         }
-        //     }
-        //     if (!empty($socialLinks)) {
-        //         $node->socialLinks = $socialLinks;
-        //     }
-        // }
+        $fax = $this->resolveDotNotation($nodeArray, 'field_fax.und.value');
+        if ($fax) $node->fax = $fax;
+        unset($node->field_fax);
 
-        // $fieldName = $this->getFieldMapName('rank');
-        // if (!empty($fieldName)) {
-        //     $rank = $this->resolveDotNotation($nodeArray, $fieldName);
-        //     if (!empty($rank)) {
-        //         $node->rank = (int) $rank;
-        //     }
-        // }
+        $phone = $this->resolveDotNotation($nodeArray, 'field_phone.und.value');
+        if ($phone) $node->phone = $phone;
+        unset($node->field_phone);
 
-        // $fieldName = $this->getFieldMapName('previousRank');
-        // if (!empty($fieldName)) {
-        //     $previousRank = $this->resolveDotNotation($nodeArray, $fieldName);
-        //     if (!empty($previousRank)) {
-        //         $node->previousRank = (int) $previousRank;
-        //     }
-        // }
+        // Sidebars
+        $blockquote = $this->resolveDotNotation($nodeArray, 'field_blockquote.und.value');
+        if ($blockquote) {
+            $node->sidebars[] = $blockquote;
+        }
+        unset($node->field_blockquote);
 
-        // $fieldName = $this->getFieldMapName('founded');
-        // if (!empty($fieldName)) {
-        //     $founded = $this->resolveDotNotation($nodeArray, $fieldName);
-        //     if (!empty($founded)) {
-        //         $node->founded = $founded;
-        //     }
-        // }
+        // Podcasts
+        // field_sub_podcasts Podcast MP3 reference
 
-        // $fieldName = $this->getFieldMapName('companyType');
-        // if (!empty($fieldName)) {
-        //     $companyType = $this->resolveDotNotation($nodeArray, $fieldName);
-        //     if (!empty($companyType)) {
-        //         $node->companyType = $companyType;
-        //     }
-        // }
+        // Videos
+        // field_white_paper // Exist on Videos, contain youtube links??
 
-        // $fieldName = $this->getFieldMapName('employees');
-        // if (!empty($fieldName)) {
-        //     $employees = $this->resolveDotNotation($nodeArray, $fieldName);
-        //     if (!empty($employees)) {
-        //         $node->employees = $employees;
-        //     }
-        // }
+        // Whitepapers
+        // field_whitepaper
 
-        // $fieldName = $this->getFieldMapName('revenueCurrent');
-        // if (!empty($fieldName)) {
-        //     $revenueCurrent = $this->resolveDotNotation($nodeArray, $fieldName);
-        //     if (!empty($revenueCurrent)) {
-        //         $node->revenueCurrent = $revenueCurrent;
-        //     }
-        // }
+        // Document
+        // field_download_document
+        // field_content_pdf
+        // top_copy, eyebrow, etc
+
+        // Apps (Product)
+        // field_app_more_information_link  // Array of url/link text
+        // field_application_case_history   // node refernce
+        // field_platforms_os   // arraya of value/revids --- match taxonomy?
+        // field_video_resources', // Exist only on apps, part of the custom data presentation?
+
+        // @todo Playbook support
+        //  field_expert, field_sponsor (array of values and revision ids?)
+        //  field_sub_title, field_playbook_name, field_playbook_pdf, field_disclaimer
+
+        // Companies
+        // field_youtube_username // Convert to socialmedia link
+        // field_sales_reps
+        // field_logo
+        // field_link   // convert to website
 
 
-        // $fieldName = $this->getFieldMapName('revenuePrior1');
-        // if (!empty($fieldName)) {
-        //     $revenuePrior1 = $this->resolveDotNotation($nodeArray, $fieldName);
-        //     if (!empty($revenuePrior1)) {
-        //         $node->revenuePrior1 = $revenuePrior1;
-        //     }
-        // }
 
-        // $fieldName = $this->getFieldMapName('revenuePriorYear1');
-        // if (!empty($fieldName)) {
-        //     $revenuePriorYear1 = $this->resolveDotNotation($nodeArray, $fieldName);
-        //     if (!empty($revenuePriorYear1)) {
-        //         $node->revenuePriorYear1 = $revenuePriorYear1;
-        //     }
-        // }
 
-        // $fieldName = $this->getFieldMapName('revenuePrior2');
-        // if (!empty($fieldName)) {
-        //     $revenuePrior2 = $this->resolveDotNotation($nodeArray, $fieldName);
-        //     if (!empty($revenuePrior2)) {
-        //         $node->revenuePrior2 = $revenuePrior2;
-        //     }
-        // }
-
-        // $fieldName = $this->getFieldMapName('revenuePriorYear2');
-        // if (!empty($fieldName)) {
-        //     $revenuePriorYear2 = $this->resolveDotNotation($nodeArray, $fieldName);
-        //     if (!empty($revenuePriorYear2)) {
-        //         $node->revenuePriorYear2 = $revenuePriorYear2;
-        //     }
-        // }
-
-        // $fieldName = $this->getFieldMapName('companyExecutives');
-        // if (!empty($fieldName)) {
-        //     $companyExecutives = $this->resolveDotNotation($nodeArray, $fieldName);
-        //     if (!empty($companyExecutives)) {
-        //         $node->companyExecutives = $companyExecutives;
-        //     }
-        // }
-
-        // $fieldName = $this->getFieldMapName('majorRevenue');
-        // if (!empty($fieldName)) {
-        //     $majorRevenue = $this->resolveDotNotation($nodeArray, $fieldName);
-        //     if (!empty($majorRevenue)) {
-        //         $node->majorRevenue = $majorRevenue;
-        //     }
-        // }
-
-        // $fieldName = $this->getFieldMapName('productCategories');
-        // if (!empty($fieldName)) {
-        //     $productCategories = $this->resolveDotNotation($nodeArray, $fieldName);
-        //     if (!empty($productCategories)) {
-        //         $node->productCategories = $productCategories;
-        //     }
-        // }
-
-        // $fieldName = $this->getFieldMapName('marketsServing');
-        // if (!empty($fieldName)) {
-        //     $marketsServing = $this->resolveDotNotation($nodeArray, $fieldName);
-        //     if (!empty($marketsServing)) {
-        //         $node->marketsServing = $marketsServing;
-        //     }
-        // }
 
         // $oldFields = ['field_image_caption']; // caption used with field_image
         // $newFields = ['_id', 'type', 'legacy', ];
