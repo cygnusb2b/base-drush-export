@@ -727,6 +727,7 @@ class ExportD75AW extends AbstractExport
             $this->createImage($primary);
             $node->legacy['refs']['primaryImage']['common'] = $fp;
         }
+        unset($node->field_image);
 
         $cover = $this->resolveDotNotation($nodeArray, 'field_cover_image.und.0');
         if ($cover) {
@@ -735,6 +736,7 @@ class ExportD75AW extends AbstractExport
             $key = $primary ? 'cover' : 'common';
             $node->legacy['refs']['primaryImage'][$key] = $fp;
         }
+        unset($node->field_cover_image);
 
         $images = $this->resolveDotNotation($nodeArray, 'field_article_images.und');
         if (!empty($images)) {
@@ -744,6 +746,7 @@ class ExportD75AW extends AbstractExport
                 $node->legacy['refs']['images']['common'][] = $fp;
             }
         }
+        unset($node->field_article_images);
 
         $images = $this->resolveDotNotation($nodeArray, 'field_360_multi_upload.und');
         if (!empty($images)) {
@@ -753,6 +756,7 @@ class ExportD75AW extends AbstractExport
                 $node->legacy['refs']['images']['360'][] = $fp;
             }
         }
+        unset($node->field_360_multi_upload);
 
         $companies = $this->resolveDotNotation($nodeArray, 'field_companies.und');
         if (!empty($companies)) {
@@ -852,6 +856,7 @@ class ExportD75AW extends AbstractExport
         unset($node->field_podcast);
 
         // Some podcasts support `sub podcasts` -- additional files/tracks uploaded to the podcast. Base won't
+        // These may need to be brought in as related content or something in the future.
         unset($node->field_sub_podcasts);
 
 
@@ -865,14 +870,32 @@ class ExportD75AW extends AbstractExport
 
         // Videos
         // field_white_paper // Exist on Videos, contain youtube links??
+        $viddler = $this->resolveDotNotation($nodeArray, 'field_viddler_id.und.0');
+        if ($viddler) $node->embedCode = $viddler['embed_code'];
 
         // Whitepapers
         // field_whitepaper
 
         // Document
-        // field_download_document
-        // field_content_pdf
-        // top_copy, eyebrow, etc
+        // field_top_copy
+        // field_eyebrow
+        $files = $this->resolveDotNotation($nodeArray, 'field_download_document.und');
+        if (!empty($files)) {
+            foreach ($files as $file) {
+                $file['_uri'] = file_create_url($file['uri']);
+                $node->legacy['refs']['files'][] = $file;
+            }
+        }
+        unset($node->field_download_document);
+
+        $files = $this->resolveDotNotation($nodeArray, 'field_content_pdf.und');
+        if (!empty($files)) {
+            foreach ($files as $file) {
+                $file['_uri'] = file_create_url($file['uri']);
+                $node->legacy['refs']['files'][] = $file;
+            }
+        }
+        unset($node->field_content_pdf);
 
         // Apps (Product)
         // field_app_more_information_link  // Array of url/link text
