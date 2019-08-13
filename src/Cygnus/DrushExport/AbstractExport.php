@@ -75,7 +75,7 @@ abstract class AbstractExport
     {
         $this->writeln(sprintf('Starting import for %s', $this->key));
 
-        $this->importUsers();
+        // $this->importUsers();
         $this->importTaxonomies();
         $this->importNodes();
 

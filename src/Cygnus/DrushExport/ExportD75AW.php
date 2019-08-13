@@ -39,11 +39,10 @@ class ExportD75AW extends AbstractExport
 
                 // Hierarchical
                 'Automation Strategies'     => 'Taxonomy\Category',     // 100+ items
-                'Industries'                => 'Taxonomy\Industry',     // 20+ items (top categories?)
                 'Topics'                    => 'Taxonomy\Topic',        // 11 items
 
-                // New hierarchies, if kept
-                'Technologies'              => 'Taxonomy\Market',       // ~50 items, similar to `Industries` taxonomy (if kept, create Technologies instead of Market)
+                'Industries'                => 'Taxonomy\Industries',   // 20+ items (top categories?)
+                'Technologies'              => 'Taxonomy\Technology',   // ~50 items, similar to `Industries` taxonomy (if kept, create Technologies instead of Market)
                 'Coverage Type'             => 'Taxonomy\Coverage',     // 20+ items, Similar to website sections?
 
                 // // Unused
@@ -243,7 +242,8 @@ class ExportD75AW extends AbstractExport
                 // 'productCategories' => 'field_hci100_product_categories.und.0.value',
                 // 'marketsServing'    => 'field_hci100_markets_serving.und.0.value',
                 // 'linkUrl'           => 'function_getRedirects',
-            ]
+            ],
+            'uri'   => 'https://www.automationworld.com',
         ],
     ];
 
@@ -412,6 +412,7 @@ class ExportD75AW extends AbstractExport
      */
     protected function convertTaxonomy(&$node)
     {
+        $taxonomy = [];
         $vocabularyFields = $this->getTaxonomyFields();
         foreach ($vocabularyFields AS $vocabularyField) {
             if(!empty($node->$vocabularyField)) {
@@ -456,12 +457,13 @@ class ExportD75AW extends AbstractExport
             unset($node->field_section);
         }
 
-        // straight to legacy refs for resolution in base postimport segment
-        if (!empty($taxonomy)) {
-            $legacySource = sprintf('%s_taxonomy', $this->getKey());
-            $node->legacy['refs']['taxonomy'][$legacySource] = $taxonomy;
-        }
+        $taxonomy = array_map(function($tid) {
+            $term = taxonomy_term_load($tid);
+            return sprintf('%s_%s', $term->vid, $tid);
+        }, $taxonomy);
 
+        // straight to legacy refs for resolution in base postimport segment
+        if (!empty($taxonomy)) $node->legacy['refs']['taxonomy'] = $taxonomy;
     }
 
     /**
@@ -603,13 +605,8 @@ class ExportD75AW extends AbstractExport
             // coverImage
             if (!empty($node->field_image)) {
                 $imageData = $node->field_image['und'][0];
-
-                // create Image for later reference resolution
-                $this->createImage($imageData);
-
-                // set ref on issue as well
-                $imageUrl = file_create_url($imageData['uri']);
-                $set['legacy']['refs']['coverImage']['common'] = $imageUrl;
+                $fp = $this->createImage($imageData);
+                $set['legacy']['refs']['coverImage']['common'] = $fp;
             }
 
             // digital edition links
@@ -723,26 +720,22 @@ class ExportD75AW extends AbstractExport
         // Images
         $primary = $this->resolveDotNotation($nodeArray, 'field_image.und.0');
         if ($primary) {
-            $fp = file_create_url($primary['uri']);
-            $this->createImage($primary);
+            $fp = $this->createImage($primary);
             $node->legacy['refs']['primaryImage']['common'] = $fp;
         }
         unset($node->field_image);
 
         $cover = $this->resolveDotNotation($nodeArray, 'field_cover_image.und.0');
         if ($cover) {
-            $fp = file_create_url($cover['uri']);
-            $this->createImage($cover);
-            $key = $primary ? 'cover' : 'common';
-            $node->legacy['refs']['primaryImage'][$key] = $fp;
+            $fp = $this->createImage($cover);
+            $node->legacy['refs']['primaryImage']['common'] = $fp;
         }
         unset($node->field_cover_image);
 
         $images = $this->resolveDotNotation($nodeArray, 'field_article_images.und');
         if (!empty($images)) {
             foreach ($images as $image) {
-                $fp = file_create_url($image['uri']);
-                $this->createImage($image);
+                $fp = $this->createImage($image);
                 $node->legacy['refs']['images']['common'][] = $fp;
             }
         }
@@ -751,9 +744,8 @@ class ExportD75AW extends AbstractExport
         $images = $this->resolveDotNotation($nodeArray, 'field_360_multi_upload.und');
         if (!empty($images)) {
             foreach ($images as $image) {
-                $fp = file_create_url($image['uri']);
-                $this->createImage($image);
-                $node->legacy['refs']['images']['360'][] = $fp;
+                $fp = $this->createImage($image);
+                $node->legacy['refs']['images']['common'][] = $fp;
             }
         }
         unset($node->field_360_multi_upload);
@@ -773,7 +765,8 @@ class ExportD75AW extends AbstractExport
             $refs = $this->resolveDotNotation($nodeArray, sprintf('field_term_%s.und', $type));
             if ($refs) {
                 foreach ($refs as $ref) {
-                    $id = (int) $ref['tid'];
+                    $term = taxonomy_term_load($ref['tid']);
+                    $id = sprintf('%s_%s', $term->vid, $ref['tid']);
                     $node->legacy['refs']['taxonomy'][] = [
                         '$ref'  => 'Taxonomy',
                         '$id'   => $id,
@@ -788,9 +781,11 @@ class ExportD75AW extends AbstractExport
         $allTerms = $this->resolveDotNotation($nodeArray, 'field_allterms.und');
         if (!empty($allTerms)) {
             foreach ($allTerms as $ref) {
+                $term = taxonomy_term_load($ref['tid']);
+                $id = sprintf('%s_%s', $term->vid, $ref['tid']);
                 $node->legacy['refs']['taxonomy'][] = [
                     '$ref'  => 'Taxonomy',
-                    '$id'   =>  (int) $ref['tid'],
+                    '$id'   =>  $id,
                     '$db'   => 'drupal_pmmi_aw',
                     'type'  => $this->loadVocabMachineName($ref['vid']),
                 ];
@@ -871,7 +866,12 @@ class ExportD75AW extends AbstractExport
         // Videos
         // field_white_paper // Exist on Videos, contain youtube links??
         $viddler = $this->resolveDotNotation($nodeArray, 'field_viddler_id.und.0');
-        if ($viddler) $node->embedCode = $viddler['embed_code'];
+        if ($viddler) {
+            $fp = $this->createImage($viddler, null, $node->created);
+            $node->legacy['refs']['primaryImage']['common'] = $fp;
+            $node->legacy['refs']['images']['common'][] = $fp;
+            $node->embedCode = $viddler['embed_code'];
+        }
 
         // Whitepapers
         // field_whitepaper
@@ -914,25 +914,31 @@ class ExportD75AW extends AbstractExport
             'label'     => 'Youtube',
             'url'       => sprintf('https://youtube.com/%s', $youtube)
         ];
+        unset($node->field_youtube_username);
 
         $logo = $this->resolveDotNotation($nodeArray, 'field_logo.und');
         if ($logo) {
-            $fp = file_create_url($logo['uri']);
-            $this->createImage($logo);
+            $fp = $this->createImage($logo);
             $node->legacy['refs']['logo'][] = $fp;
         }
+        unset($node->field_logo);
 
         $link = $this->resolveDotNotation($nodeArray, 'field_link.und.url');
         if ($link) $node->website = $link;
+        unset($node->field_link);
 
         // Leadership Session
         $tid = $this->resolveDotNotation($nodeArray, 'field_ld_session.und.tid');
-        if ($tid) $node->legacy['refs']['taxonomy'][] = [
-            '$ref'  => 'Taxonomy',
-            '$id'   => (int) $tid,
-            '$db'   => 'drupal_pmmi_aw',
-            'type'  => 'leadership_session',
-        ];
+        if ($tid) {
+            $term = taxonomy_term_load($tid);
+            $id = sprintf('%s_%s', $term->vid, $tid);
+            $node->legacy['refs']['taxonomy'][] = [
+                '$ref'  => 'Taxonomy',
+                '$id'   => $id,
+                '$db'   => 'drupal_pmmi_aw',
+                'type'  => 'leadership_session',
+            ];
+        }
         unset($node->field_ld_session);
 
 
@@ -980,32 +986,46 @@ class ExportD75AW extends AbstractExport
      * Creates an image to create as Asset in base4
      *
      */
-    protected function createImage(array $img, $caption = null)
+    protected function createImage(array $img, $caption = null, $date = null)
     {
-        $id = (int) $img['fid'];
-        if ($id === 0) return;
+        if (isset($img['thumbnail_fid'])) {
+            $id = (int) $img['thumbnail_fid'];
+            $url = $img['thumbnail_url'];
+            $name = basename($url);
+            $date = $date ? date('c', $date) : date('c');
+        } else {
+            $id = (int) $img['fid'];
+            if ($id === 0) return;
+            $url = file_create_url($img['uri']);
+            $url = str_replace('http://default', $this->map['uri'], $url);
+            $name = $img['filename'];
+            $date = date('c', $img['timestamp']);
+        }
+
+        $newName = sprintf('%s_%s_%s', $this->getKey(), $id, $name);
 
         $kv = [
             '_id'       => $id,
             'type'      => 'Image',
-            'name'      => $img['filename'],
-            'fileName'  => $img['filename'],
+            'name'      => $newName,
+            'fileName'  => $newName,
             'source'    => [
-                'location'  => file_create_url($img['uri']),
-                'name'      => $img['filename'],
+                'location'  => $url,
+                'name'      => $name,
             ],
             'caption'   => $img['title'],
             'alt'       => $img['alt'],
             'legacy'    => [
                 'id'        => $id,
                 'source'    => sprintf('common'),
-                'created'   => date('c', $img['timestamp']),
+                'created'   => $date,
             ]
         ];
 
         $filter = ['_id' => $id];
         $update = ['$set' => $kv];
-        return $this->dbal->upsert($this->database, 'Image', $filter, $update);
+        $this->dbal->upsert($this->database, 'Image', $filter, $update);
+        return $url;
     }
 
     /**
@@ -1022,6 +1042,25 @@ class ExportD75AW extends AbstractExport
      */
     protected function importTaxonomy($vocab)
     {
+        // Insert the root vocab for hierarchical vocabs
+        $vid = $vocab->vid;
+        $type = str_replace('Taxonomy\\', '', $this->map['Taxonomy'][$vocab->name]);
+        if (!in_array($type, ['Bin', 'Tag'])) {
+            $filter = ['_id' => $vid];
+            $update = [
+                '$set'  => [
+                    '_id'   => $vid,
+                    'type'  => $type,
+                    'name'  => $vocab->name,
+                    'legacy'    => [
+                        '_id'       => $vid,
+                        'source'    => sprintf('%s_vocab', $this->getKey()),
+                    ],
+                ],
+            ];
+            $this->dbal->upsert($this->database, 'Taxonomy', $filter, $update);
+        }
+
         $limit = 200;
         $terms = taxonomy_get_tree($vocab->vid);
         $count = count($terms);
@@ -1036,31 +1075,45 @@ class ExportD75AW extends AbstractExport
             return $terms[$index];
         };
 
-        $modifier = function($term) use ($vocab) {
+        $modifier = function($term) use ($vocab, $vid, $type) {
             $tid = (int) $term->tid;
             if ($tid === 0) return;
-            $type = str_replace('Taxonomy\\', '', $this->map['Taxonomy'][$vocab->name]);
             $alias = taxonomy_term_uri($term)['path'];
             if (false !== $path = drupal_lookup_path('alias', $alias)) $alias = $path;
             $parent = (int) array_pop($term->parents);
+            if ($parent && $parent !== 0) {
+                $parent = [
+                    'id'        => sprintf('%s_%s', $vid, $parent),
+                    'source'    => sprintf('%s_term', $this->getKey()),
+                ];
+            } else {
+                if (!in_array($type, ['Bin', 'Tag'])) {
+                    $parent = [
+                        'id'        => $vid,
+                        'source'    => sprintf('%s_vocab', $this->getKey()),
+                    ];
+                }
+            }
+            $id = sprintf('%s_%s', $vid, $tid);
 
             $op = [
-                'filter'    => [ '_id' => $tid ],
+                'filter'    => [ '_id' => $id ],
                 'update'    => [
                     '$set'  => [
-                        '_id'       => $tid,
+                        '_id'       => $id,
                         'type'      => $type,
                         'name'      => $type === 'Bin' ? sprintf('%s: %s', $vocab->name, $term->name) : $term->name,
                         'alias'         => $alias,
                         'legacy'        => [
-                            'id'            => (String) $term->tid,
-                            'source'        => sprintf('%s_taxonomy_%s', $this->getKey(), $vocab->machine_name),
+                            'id'            => $id,
+                            'source'        => sprintf('%s_term', $this->getKey()),
+                            'vid'           => $vid,
                         ],
                     ]
                 ],
             ];
 
-            if ($parent !== 0) $op['update']['$set']['parent'] = $parent;
+            if ($parent) $op['update']['$set']['legacy']['refs']['parent'] = $parent;
             if ($term->description) $op['update']['$set']['description'] = $term->description;
             return $op;
         };
