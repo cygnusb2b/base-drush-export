@@ -20,21 +20,23 @@ if (version_compare(DRUPAL_VERSION, '7.0') >= 0) {
 ini_set('memory_limit', -1);
 set_time_limit(0);
 
-global $argv;
+$dsn = getenv('MONGO_DSN');
+$key = getenv('KEY');
 
-if (!isset($argv[5])) {
-    echo "\r\n\r\nERROR! You MUST specify a MongoDB server as an argument.\r\n\r\n";
+if (!$dsn) {
+    echo "\r\n\r\nERROR! You MUST specify the MongoDB server using the `MONGO_DSN` environment variable.\r\n\r\n";
     exit(1);
 }
-$dsn = sprintf('mongodb://%s', $argv[5]);
 
-if (!isset($argv[6])) {
-    echo "\r\n\r\nERROR! You MUST specify a valid configuration key as an argument.\r\n\r\n";
+if (!$key) {
+    echo "\r\n\r\nERROR! You MUST specify a valid configuration key using the `KEY` environment variable.\r\n\r\n";
     exit(1);
 }
-$key = $argv[6];
-if ('nashvillepost' == $key) $class = 'cygnus\\DrushExport\\ExportNVP';
+$dsn = false === stristr($dsn, 'mongodb://') ? sprintf('mongodb://%s', $dsn) : $dsn;
+
+if ('nashvillepost' == $key) $class = 'Cygnus\\DrushExport\\ExportNVP';
 if ('aw' == $key) $class = 'Cygnus\DrushExport\ExportD75AW';
+if ('hp' == $key) $class = 'Cygnus\DrushExport\ExportD75AW';
 
 $export = new $class($key, $dsn);
 $export->execute();
