@@ -52,9 +52,12 @@ class HP extends Export
                 // 'DFP Ad Categories'             => '', //
 
             ],
-            'Content'   => [],
+            'Content'   => [
+            ],
             'Section'   => [],
-            'Issue'     => [],
+            'Issue'     => [
+                'magazine' => 'Magazine\\Issue',
+            ],
             'structure' =>  [
                 'stripFields'   => [],
                 '_id'       => 'nid',

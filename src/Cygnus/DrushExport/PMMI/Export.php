@@ -18,6 +18,35 @@ use MongoDB\BSON\UTCDateTime;
  */
 abstract class Export extends AbstractExport
 {
+    /**
+     * Main export function.
+     */
+    public function execute()
+    {
+        $this->writeln(sprintf('Starting import for %s', $this->key));
+
+        $this->importUsers();
+        $this->importTaxonomies();
+        $this->importNodes();
+
+        $this->writeln('Import complete.', true, true);
+    }
+
+    /**
+     * Iterates over nodes and exports them.
+     */
+    protected function importNodes()
+    {
+        $this->writeln('Importing Nodes.', false, true);
+        $this->indent();
+
+        $this->importWebsiteSectionNodes();
+        $this->importMagazineIssueNodes();
+        $this->importContentNodes();
+
+        $this->outdent();
+    }
+
     // strip fields so they do not show as unsupported, once identified as useless
     protected function removeCrapFields(&$node)
     {
@@ -341,9 +370,17 @@ abstract class Export extends AbstractExport
             $nid = (int) $node->nid;
             if (0 === $nid) return;
 
+            $nodeArray = json_decode(json_encode($node, 512), true);
+
+            $title = str_replace('Automation World', '', $node->title);
+            $title = str_replace('Automation World - ', '', $title);
+            $title = str_replace('Healthcare Packaging', '', $title);
+            $title = str_replace('Healthcare Packaging - ', '', $title);
+            $title = trim($title);
+
             $set = [
                 '_id'               => (int) $node->nid,
-                'name'              => $node->title,
+                'name'              => $title,
                 'created'           => (int) $node->created,
                 'updated'           => (int) $node->changed,
                 'status'            => (int) $node->status,
@@ -356,35 +393,41 @@ abstract class Export extends AbstractExport
 
             if (!empty($node->body)) $set['description'] = $node->body;
 
-            $mailDate = strtotime(str_replace('Automation World', '', $node->title));
-            if ($mailDate === false) {
-                $title = trim($node->title);
-                $title = str_replace('Automation World - ', '', $title);
-                // Try and regex parse out ".*\w{3} \d{4}" or similar to get IIOT suppliement asdfasdf november 2018
-                if (\preg_match('/^.*?([\w]{1,}\s[\d]{2,})/i', $title, $matches)) $title = $matches[1];
-
+            $issueDate = $this->resolveDotNotation($nodeArray, 'field_issue_date.und.0.value');
+            if ($issueDate) {
+                $mailDate = new DateTime(date('c', $issueDate));
+            } else {
                 $mailDate = strtotime($title);
-                if(!$mailDate) $this->writeln(sprintf('Unable to parse mailDate from title %s.', $node->title));
+                if ($mailDate === false) {
+                    // Try and regex parse out ".*\w{3} \d{4}" or similar to get IIOT suppliement asdfasdf november 2018
+                    if (\preg_match('/^.*?([\w]{1,}\s[\d]{2,})/i', $title, $matches)) $title = $matches[1];
+                    $mailDate = strtotime($title);
+                    if(!$mailDate) $this->writeln(sprintf('Unable to parse mailDate from title %s.', $node->title));
+                }
+                $mailDate = new DateTime(date('c', $mailDate), $tz);
             }
-            $mailDate = new DateTime(date('c', $mailDate), $tz);
 
             if (false !== $mailDate) {
                 $set['mailDate'] = $mailDate->format('c');
                 $set['legacy']['shortName'] = strtolower($mailDate->format('My'));
             }
 
+            $tid = $this->resolveDotNotation($nodeArray, 'field_term_media.und.0.tid');
+            if ($tid) {
+                $term = taxonomy_term_load($tid);
+                $set['legacy']['refs']['publication'] = ['tid' => $tid, 'vid' => $term->vid, 'name' => $term->name];
+            }
+
             // coverImage
-            if (!empty($node->field_image)) {
-                $imageData = $node->field_image['und'][0];
-                $fp = $this->createImage($imageData);
+            $image = $this->resolveDotNotation($nodeArray, 'field_image.und.0');
+            if ($image) {
+                $fp = $this->createImage($image);
                 $set['legacy']['refs']['coverImage']['common'] = $fp;
             }
 
             // digital edition links
-            if (!empty($node->field_link)) {
-                $url = $node->field_link['und'][0];
-                $set['digitalEditionUrl'] = $url['url'];
-            }
+            $link = $this->resolveDotNotation($nodeArray, 'field_link.und.0.url');
+            if ($link) $set['digitalEditionUrl'] = $link;
 
             return [
                 'filter'    => [ '_id'  => $nid ],
