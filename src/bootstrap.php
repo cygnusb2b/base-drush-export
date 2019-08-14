@@ -35,8 +35,8 @@ if (!$key) {
 $dsn = false === stristr($dsn, 'mongodb://') ? sprintf('mongodb://%s', $dsn) : $dsn;
 
 if ('nashvillepost' == $key) $class = 'Cygnus\\DrushExport\\ExportNVP';
-if ('aw' == $key) $class = 'Cygnus\DrushExport\ExportD75AW';
-if ('hp' == $key) $class = 'Cygnus\DrushExport\ExportD75AW';
+if ('aw' == $key) $class = 'Cygnus\DrushExport\PMMI\AW';
+if ('hp' == $key) $class = 'Cygnus\DrushExport\PMMI\HP';
 
 $export = new $class($key, $dsn);
 $export->execute();
