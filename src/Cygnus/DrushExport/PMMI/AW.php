@@ -18,34 +18,31 @@ class AW extends Export
      */
     protected $configs = [
         'aw'  => [
+            'name'      => 'Automation World',
             'database'  => 'drupal_pmmi_aw',
             'uri'       => 'https://www.automationworld.com',
+            'Issue'     => [
+                'magazine_covers' => 'Magazine\\Issue',                         // magazine cover image, digital edition url
+            ],
             'Taxonomy'  => [
-                // Static lists (prefix with key aka `Column Type: Feed Forward`)
+                // Shared/common
+                'Company Type'              => 'Taxonomy\Bin',          // ~ 5 items
+                'Source Type'               => 'Taxonomy\Bin',          // 5 items, used to denote UGC and/or display concerns
+                'Subtype'                   => 'Taxonomy\Bin',          // 12 items, used to determine article sub type
+                'Coverage Type'             => 'Taxonomy\Coverage',     // 20+ items, Similar to website sections?
+                'Tags'                      => 'Taxonomy\Tag',
+                // AW-specific
                 'App Platforms/OS'          => 'Taxonomy\Bin',          // ~5 items
                 'Blog Beat'                 => 'Taxonomy\Bin',          // ~ 20 items
                 'Column Type'               => 'Taxonomy\Bin',          // ~ 10 items
-                'Company Type'              => 'Taxonomy\Bin',          // ~ 5 items
                 'Download Subtype'          => 'Taxonomy\Bin',          // 2 items (Tactical Brief, Whitepaper)
                 'Industry Type'             => 'Taxonomy\Bin',          // 4 items
                 'Leadership Session'        => 'Taxonomy\Bin',          // 5 items, years 2015-2019
-                'Source Type'               => 'Taxonomy\Bin',          // 5 items, used to denote UGC and/or display concerns
-                'Subtype'                   => 'Taxonomy\Bin',          // 12 items, used to determine article sub type
-
-                // Tags
-                'Tags'                      => 'Taxonomy\Tag',
-
-                // Hierarchical
                 'Automation Strategies'     => 'Taxonomy\Category',     // 100+ items
                 'Topics'                    => 'Taxonomy\Topic',        // 11 items
-
+                // New hierarchical types
                 'Industries'                => 'Taxonomy\Industries',   // 20+ items (top categories?)
                 'Technologies'              => 'Taxonomy\Technology',   // ~50 items, similar to `Industries` taxonomy (if kept, create Technologies instead of Market)
-                'Coverage Type'             => 'Taxonomy\Coverage',     // 20+ items, Similar to website sections?
-
-                // // Unused
-                // 'DFP Ad Categories',
-                // 'Sponsors',
             ],
             'Content'   => [
                 '360_package_spin_rotate' => 'Website\\Content\\Product',      // Needs some custom field handling for the 3D display
@@ -81,9 +78,6 @@ class AW extends Export
             'Section'   => [
                 // 'page' => 'Website\\Section',
                 // 'page2' => 'Website\\Section',
-            ],
-            'Issue'     => [
-                'magazine_covers' => 'Magazine\\Issue',                         // magazine cover image, digital edition url
             ],
             'structure' =>  [
                 'stripFields'   => [

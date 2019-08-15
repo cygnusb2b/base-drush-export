@@ -299,6 +299,7 @@ class ExportD75 extends AbstractExport
 
                 default:
                     $object = node_load($row->nid);
+                    unset($object->rdf_mapping);
                     break;
             }
             if (is_object($object)) {

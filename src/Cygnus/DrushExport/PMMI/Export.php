@@ -25,9 +25,9 @@ abstract class Export extends AbstractExport
     {
         $this->writeln(sprintf('Starting import for %s', $this->key));
 
-        $this->importUsers();
+        // $this->importUsers();
         $this->importTaxonomies();
-        $this->importNodes();
+        // $this->importNodes();
 
         $this->writeln('Import complete.', true, true);
     }
@@ -40,9 +40,9 @@ abstract class Export extends AbstractExport
         $this->writeln('Importing Nodes.', false, true);
         $this->indent();
 
-        $this->importWebsiteSectionNodes();
+        // $this->importWebsiteSectionNodes();
         $this->importMagazineIssueNodes();
-        $this->importContentNodes();
+        // $this->importContentNodes();
 
         $this->outdent();
     }
@@ -370,12 +370,15 @@ abstract class Export extends AbstractExport
             $nid = (int) $node->nid;
             if (0 === $nid) return;
 
+            unset($node->field_image['und'][0]['metatags']);
             $nodeArray = json_decode(json_encode($node, 512), true);
 
-            $title = str_replace('Automation World', '', $node->title);
-            $title = str_replace('Automation World - ', '', $title);
-            $title = str_replace('Healthcare Packaging', '', $title);
-            $title = str_replace('Healthcare Packaging - ', '', $title);
+            $publication = $this->configs[$this->getKey()]['name'];
+
+            $title = str_replace(sprintf('%s - ', $publication), '', $node->title);
+            $title = str_replace(sprintf('%s\'s', $publication), '', $title);
+            $title = str_replace($publication, '', $title);
+            $title = str_replace('  ', ' ', $title);
             $title = trim($title);
 
             $set = [
@@ -387,22 +390,32 @@ abstract class Export extends AbstractExport
                 'legacy'            => [
                     'id'                => (string) $node->nid,
                     'source'            => sprintf('%s_issue_%s', $this->getKey(), $node->type),
-                    'raw'               => $node,
+                    'raw'               => $nodeArray,
                 ],
             ];
 
             if (!empty($node->body)) $set['description'] = $node->body;
 
             $issueDate = $this->resolveDotNotation($nodeArray, 'field_issue_date.und.0.value');
+            $date = $this->resolveDotNotation($nodeArray, 'field_date.und.0.value');
             if ($issueDate) {
                 $mailDate = new DateTime(date('c', $issueDate));
+            } elseif ($date) {
+                $mailDate = new DateTime(date('c', $date));
             } else {
                 $mailDate = strtotime($title);
                 if ($mailDate === false) {
                     // Try and regex parse out ".*\w{3} \d{4}" or similar to get IIOT suppliement asdfasdf november 2018
                     if (\preg_match('/^.*?([\w]{1,}\s[\d]{2,})/i', $title, $matches)) $title = $matches[1];
                     $mailDate = strtotime($title);
-                    if(!$mailDate) $this->writeln(sprintf('Unable to parse mailDate from title %s.', $node->title));
+                    if(!$mailDate) {
+                        $mailDate = (int) $node->created;
+                        if (!$mailDate) {
+                            $this->writeln(sprintf('Unable to parse mailDate from title %s.', $node->title));
+                            var_dump($node);
+                            die();
+                        }
+                    }
                 }
                 $mailDate = new DateTime(date('c', $mailDate), $tz);
             }
@@ -420,6 +433,7 @@ abstract class Export extends AbstractExport
 
             // coverImage
             $image = $this->resolveDotNotation($nodeArray, 'field_image.und.0');
+            if (!$image) $image = $this->resolveDotNotation($nodeArray, 'field_magazine_image.und.0');
             if ($image) {
                 $fp = $this->createImage($image);
                 $set['legacy']['refs']['coverImage']['common'] = $fp;

@@ -6,18 +6,18 @@ namespace Cygnus\DrushExport\PMMI;
  * Healthcare Packaging customizations
  *
  */
-class HP extends Export
+class PW extends Export
 {
     /**
      * {@inheritdoc}
      */
     protected $configs = [
-        'hp'  => [
-            'name'      => 'Healthcare Packaging',
-            'database'  => 'drupal_pmmi_hp',
-            'uri'       => 'https://www.healthcarepackaging.com',
+        'pw'  => [
+            'name'      => 'Packaging World',
+            'database'  => 'drupal_pmmi_pw',
+            'uri'       => 'https://www.packworld.com',
             'Issue'     => [
-                'magazine' => 'Magazine\\Issue',
+                'magazine_covers' => 'Magazine\\Issue',
             ],
             'Taxonomy'  => [
                 // Shared/common
@@ -33,18 +33,22 @@ class HP extends Export
                 'Package Component'             => 'Taxonomy\PackageComponent',
                 'Package Feature'               => 'Taxonomy\PackageFeature',
                 'Package Type'                  => 'Taxonomy\PackageType',
-                // HP-specfific
+                // PW-specific
                 'Contract Packaging'            => 'Taxonomy\Bin',
+                'Expo Pack Session'             => 'Taxonomy\Bin',
+                'Gallery Features'              => 'Taxonomy\Bin',
+                'Gallery Industry'              => 'Taxonomy\Bin',
+                'Gallery Type'                  => 'Taxonomy\Bin',
+                'Leadership Main Categories'    => 'Taxonomy\Bin',
+                'Leadership Session'            => 'Taxonomy\Bin',
                 'Line speed'                    => 'Taxonomy\Bin',
                 'Machine attributes'            => 'Taxonomy\Bin',
-                'Expert - Areas of Expertise'   => 'Taxonomy\Bin',
-                'Leadership Session'            => 'Taxonomy\Bin',
-                'Premier Categories'            => 'Taxonomy\Bin',
                 'Package design'                => 'Taxonomy\Bin',
                 'Sustainability'                => 'Taxonomy\Bin',
                 'Venue'                         => 'Taxonomy\Bin',
-                'Logistics'                     => 'Taxonomy\Bin',
                 'Applications'                  => 'Taxonomy\Category',
+                'Expo Pack Showcase Categories' => 'Taxonomy\ExpoPackShowcaseCategory',
+                'Leadership Categories'         => 'Taxonomy\LeadershipCategory',
                 'Trends and Issues'             => 'Taxonomy\Topic',
             ],
             'Content'   => [],
