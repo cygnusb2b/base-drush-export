@@ -26,8 +26,8 @@ abstract class Export extends AbstractExport
         $this->writeln(sprintf('Starting import for %s', $this->key));
 
         // $this->importUsers();
-        $this->importTaxonomies();
-        // $this->importNodes();
+        // $this->importTaxonomies();
+        $this->importNodes();
 
         $this->writeln('Import complete.', true, true);
     }
@@ -41,8 +41,8 @@ abstract class Export extends AbstractExport
         $this->indent();
 
         // $this->importWebsiteSectionNodes();
-        $this->importMagazineIssueNodes();
-        // $this->importContentNodes();
+        // $this->importMagazineIssueNodes();
+        $this->importContentNodes();
 
         $this->outdent();
     }
@@ -489,7 +489,9 @@ abstract class Export extends AbstractExport
             }
             $type = $this->term_cache[$tid];
             if (in_array($type, ['News'])) $node->type = 'News';
-            if (in_array($type, ['Perspective', 'Column'])) $node->type = 'Blog';
+            if (in_array($type, ['Perspective', 'Column', 'Column/Opinion'])) $node->type = 'Blog';
+            if (in_array($type, ['Controls Product Brief', 'Machine Product Brief', 'Materials Product Brief', 'Product Brief', 'Supplier News'])) $node->type = 'PressRelease';
+            // @todo review additional types for OEM, PFW, PW
         }
 
         // _id
@@ -533,6 +535,7 @@ abstract class Export extends AbstractExport
         if (!empty($teaser)) $node->teaser = $teaser;
 
         $author = $this->resolveDotNotation($nodeArray, 'field_byline.und.0.value');
+        if (!$author) $author = $this->resolveDotNotation($nodeArray, 'name');
         if ($author) {
             list($first, $last) = explode(' ', $author, 2);
             $title = $this->resolveDotNotation($nodeArray, 'field_author_title.und.0.value');
