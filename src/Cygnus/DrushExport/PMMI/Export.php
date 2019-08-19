@@ -572,6 +572,16 @@ abstract class Export extends AbstractExport
         }
         unset($node->field_article_images);
 
+        // @todo should this be only for PFW??
+        $images = $this->resolveDotNotation($nodeArray, 'field_sponsors.und');
+        if (!empty($images)) {
+            foreach ($images as $image) {
+                $fp = $this->createImage($image);
+                $node->legacy['refs']['images']['common'][] = $fp;
+            }
+        }
+        unset($node->field_sponsors);
+
         $images = $this->resolveDotNotation($nodeArray, 'field_360_multi_upload.und');
         if (!empty($images)) {
             foreach ($images as $image) {
@@ -772,8 +782,16 @@ abstract class Export extends AbstractExport
         }
         unset($node->field_ld_session);
 
-
-
+        $date = $this->resolveDotNotation($nodeArray, 'field_event_date.und.0.value');
+        if ($date) {
+            $node->startDate = date('c', strtotime($date));
+            $end = $this->resolveDotNotation($nodeArray, 'field_event_date.und.0.value2');
+            if ($end) {
+                $node->endDate = date('c', strtotime($end));
+            } else {
+                $node->allDay = true;
+            }
+        }
 
 
 

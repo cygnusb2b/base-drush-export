@@ -784,6 +784,7 @@ abstract class AbstractExport
         $legacy['type'] = $node->type;
         $rawNode = json_decode(json_encode($node, 512), true);
         $rawNode = $this->removeMeta($rawNode);
+
         $legacy['raw'] = $rawNode;
 
         $node->legacy = $legacy;
