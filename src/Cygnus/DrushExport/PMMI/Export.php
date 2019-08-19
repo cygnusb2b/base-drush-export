@@ -26,7 +26,7 @@ abstract class Export extends AbstractExport
         $this->writeln(sprintf('Starting import for %s', $this->key));
 
         // $this->importUsers();
-        // $this->importTaxonomies();
+        $this->importTaxonomies();
         $this->importNodes();
 
         $this->writeln('Import complete.', true, true);
@@ -41,7 +41,7 @@ abstract class Export extends AbstractExport
         $this->indent();
 
         // $this->importWebsiteSectionNodes();
-        // $this->importMagazineIssueNodes();
+        $this->importMagazineIssueNodes();
         $this->importContentNodes();
 
         $this->outdent();
