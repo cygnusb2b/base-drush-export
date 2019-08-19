@@ -762,8 +762,20 @@ abstract class AbstractExport
      */
     abstract protected function importContentTypeNodes($type, $limit = 200);
 
+
+    protected function removeMeta(array $data)
+    {
+        if (isset($data['metatags'])) unset($data['metatags']);
+        foreach ($data as $key => $value) {
+            if (is_array($data[$key])) {
+                $data[$key] = $this->removeMeta($data[$key]);
+            }
+        }
+        return $data;
+    }
+
     // storage of legacy values pre-drush
-    public function convertLegacy(&$node)
+    protected function convertLegacy(&$node)
     {
         $legacy = array();
         $legacy['id'] = (string) $node->nid;
@@ -771,6 +783,7 @@ abstract class AbstractExport
 
         $legacy['type'] = $node->type;
         $rawNode = json_decode(json_encode($node, 512), true);
+        $rawNode = $this->removeMeta($rawNode);
         $legacy['raw'] = $rawNode;
 
         $node->legacy = $legacy;
