@@ -39,7 +39,24 @@ class PFW extends Export
                 'Advertiser product'            => 'Taxonomy\Category',
                 'Topic'                         => 'Taxonomy\Topic',
             ],
-            'Content'   => [],
+            'Content'   => [
+                'article'                   => 'Website\Content\Article',
+                'page'                      => 'Website\Content\Page',
+                'company'                   => 'Website\Content\Company',
+                'registration_form'         => 'Website\Content\Document',
+                'video'                     => 'Website\Content\Video',
+                'whitepaper'                => 'Website\Content\Whitepaper',
+                'webinar_registration'      => 'Website\Content\Webinar',
+                'playbook'                  => 'Website\Content\Document',
+                'person'                    => 'Website\Content\Contact',
+
+                'bi_library_article'        => 'Website\Content\Document',  // Gated download+form
+                // 'bi_library_form',
+                'event'                     => 'Website\Content\Event',
+                // 'leadership_data_card',
+                // 'leadership_online_profile',
+                // 'leadership_print_profile',
+            ],
             'Section'   => [],
             'structure' =>  [
                 'stripFields'   => [],

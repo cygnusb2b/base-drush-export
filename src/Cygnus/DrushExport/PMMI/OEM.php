@@ -36,7 +36,21 @@ class OEM extends Export
                 'Products'                      => 'Taxonomy\Category',
                 'Trend Setter Session'          => 'Taxonomy\Topic',
             ],
-            'Content'   => [],
+            'Content'   => [
+                '360_package_spin_rotate'   => 'Website\Content\Product',
+                'article'                   => 'Website\Content\Article',
+                'page'                      => 'Website\Content\Page',
+                'company'                   => 'Website\Content\Company',
+                'registration_form'         => 'Website\Content\Document',
+                'video'                     => 'Website\Content\Video',
+                'whitepaper'                => 'Website\Content\Whitepaper',
+                // 'leadership_data_card'
+                // 'leadership_online_profile'
+                // 'leadership_print_profile'
+                // 'calendar'               // One item, test event, not enabled in drupal UI
+                // 'featured_article'       // One item, user-submitted photo gallery from 2016, not published
+                // 'magazine'               // Subset of issues, no additional data
+            ],
             'Section'   => [],
             'structure' =>  [
                 'stripFields'   => [],

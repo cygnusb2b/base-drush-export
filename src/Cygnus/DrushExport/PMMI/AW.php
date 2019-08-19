@@ -45,35 +45,26 @@ class AW extends Export
                 'Technologies'              => 'Taxonomy\Technology',   // ~50 items, similar to `Industries` taxonomy (if kept, create Technologies instead of Market)
             ],
             'Content'   => [
-                '360_package_spin_rotate' => 'Website\\Content\\Product',      // Needs some custom field handling for the 3D display
-                'apps'  => 'Website\\Content\\Product',                        // Custom field handling
-                'around_the_world'  => 'Website\\Content\\Article',            // Around the world section/blog
-
-                'article' => 'Website\\Content\\Article',                      // Make all Articles by default
-
-                'page'  => 'Website\\Content\\Page',
-                'blog'  => 'Website\\Content\\Blog',
-                'company' => 'Website\\Content\\Company',
-                'download'  => 'Website\\Content\\Document',
-                // 'form_template'
-                // 'leadership_data_card'                                       // Additional information about companies, unsure where used.
-                // 'leadership_online_profile'                                  // More info,
-                // 'leadership_print_profile'                                   // More info, print revision??
-                'mini_bant' => 'Website\\Content\\TextAd',                      // Sponsored content, gated video/whitepaper landing page
-                // 'mobile_webform'
-                // 'opt_out_form'
-                'playbook'  => 'Website\\Content\\Document',                    // May necessitate a custom content type, but a gated landing page for a PDF download
-                'podcast' => 'Website\\Content\\Podcast',
-                // 'pop_up_registration'                                        // Popup ad form pushing to omeda sub
-                'registration_form' => 'Website\\Content\\Document',            // Majority appear to be PDF gates (some weird ones like ENL signups)
-                'stage_one_form'  => 'Website\\Content\\TextAd',                // Landing pages/promo blurbs pushing to registration_forms
-                'video' => 'Website\\Content\\Video',
-                'webform' => 'Website\\Content\\TextAd',                        // Same as stage_one_form
-                'webinar' => 'Website\\Content\\Webinar',                       // All old, currently unpublished
-                'webinar_registration'  => 'Website\\Content\\Webinar',         // Current webinar landing form
-                // 'webinar_series'
-                'week_in_review'  => 'Website\\Content\\News',                  // News/sponsored review, "Beyond the Factory Walls" primary section??
-                'whitepaper'  => 'Website\\Content\\Whitepaper',
+                '360_package_spin_rotate'   => 'Website\Content\Product',   // Needs some custom field handling for the 3D display
+                'apps'                      => 'Website\Content\Product',   // Custom field handling
+                'around_the_world'          => 'Website\Content\Article',   // Around the world section/blog
+                'article'                   => 'Website\Content\Article',   // Make all Articles by default
+                'page'                      => 'Website\Content\Page',
+                'blog'                      => 'Website\Content\Blog',
+                'company'                   => 'Website\Content\Company',
+                'download'                  => 'Website\Content\Document',
+                // 'leadership_data_card'                                   // Additional information about companies, unsure where used.
+                // 'leadership_online_profile'                              // More info,
+                // 'leadership_print_profile'                               // More info, print revision??
+                'mini_bant'                 => 'Website\Content\TextAd',    // Sponsored content, gated video/whitepaper landing page
+                'playbook'                  => 'Website\Content\Document',  // May necessitate a custom content type, but a gated landing page for a PDF download
+                'podcast'                   => 'Website\Content\Podcast',
+                'registration_form'         => 'Website\Content\Document',  // Majority appear to be PDF gates (some weird ones like ENL signups)
+                'video'                     => 'Website\Content\Video',
+                'webinar'                   => 'Website\Content\Webinar',   // All old, currently unpublished
+                'webinar_registration'      => 'Website\Content\Webinar',   // Current webinar landing form
+                'week_in_review'            => 'Website\Content\News',      // News/sponsored review, "Beyond the Factory Walls" primary section??
+                'whitepaper'                => 'Website\Content\Whitepaper',
             ],
             'Section'   => [
                 // 'page' => 'Website\\Section',

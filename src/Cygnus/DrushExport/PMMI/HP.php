@@ -47,7 +47,24 @@ class HP extends Export
                 'Applications'                  => 'Taxonomy\Category',
                 'Trends and Issues'             => 'Taxonomy\Topic',
             ],
-            'Content'   => [],
+            'Content'   => [
+                '360_package_spin_rotate'   => 'Website\Content\Product',
+                'article'                   => 'Website\Content\Article',
+                'page'                      => 'Website\Content\Page',
+                'company'                   => 'Website\Content\Company',
+                'expert'                    => 'Website\Content\Contact',
+                'html_content'              => 'Website\Content\Page',
+                'registration_form'         => 'Website\Content\Document',
+                'video'                     => 'Website\Content\Video',
+                'webinar_registration'      => 'Website\Content\Webinar',
+                'white_paper'               => 'Website\Content\Whitepaper',
+                'playbook'                  => 'Website\Content\Document',
+                'podcast'                   => 'Website\Content\Podcast',
+                // 'leadership_data_card'
+                // 'leadership_online_profile'
+                // 'leadership_print_profile'
+                // 'premier_supplier_data_card',
+            ],
             'Section'   => [],
             'structure' =>  [
                 'stripFields'   => [],
