@@ -26,7 +26,7 @@ class PW extends Export
                 'Source type'                   => 'Taxonomy\Bin',
                 'Subtype'                       => 'Taxonomy\Bin',
                 'Coverage type'                 => 'Taxonomy\Coverage',
-                'Tags'                          => 'Taxonomy\Tag',
+                // 'Tags'                          => 'Taxonomy\Tag',
                 'Machinery'                     => 'Taxonomy\Machinery',
                 'Material Type'                 => 'Taxonomy\Material',
                 'Controls'                      => 'Taxonomy\Controls',
@@ -34,7 +34,7 @@ class PW extends Export
                 'Package Feature'               => 'Taxonomy\PackageFeature',
                 'Package Type'                  => 'Taxonomy\PackageType',
                 // PW-specific
-                'Contract Packaging'            => 'Taxonomy\Bin',
+                'Contract packaging'            => 'Taxonomy\Bin',
                 'Expo Pack Session'             => 'Taxonomy\Bin',
                 'Gallery Features'              => 'Taxonomy\Bin',
                 'Gallery Industry'              => 'Taxonomy\Bin',

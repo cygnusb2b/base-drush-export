@@ -257,7 +257,7 @@ abstract class AbstractExport
      * @param   array   $img        The image data
      * @param   string  $caption    The image caption, if available.
      */
-    abstract protected function createImage(array $img, $caption = null);
+    abstract protected function createImage($img, $caption = null);
 
     final protected function getHost()
     {
@@ -658,7 +658,7 @@ abstract class AbstractExport
         }
     }
 
-    final protected function importMagazineIssueNodes()
+    protected function importMagazineIssueNodes()
     {
         if (!isset($this->map['Issue']) || empty($this->map['Issue'])) {
             $this->writeln(sprintf('You must set the issue map for %s:', $this->key), false, true);

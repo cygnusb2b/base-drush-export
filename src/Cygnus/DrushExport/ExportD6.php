@@ -172,7 +172,7 @@ class ExportD6 extends AbstractExport
     /**
      * {@inheritdoc}
      */
-    protected function createImage(array $img, $caption = null)
+    protected function createImage($img, $caption = null)
     {
         if ((int) $img['fid'] === 0) {
             return;

@@ -40,6 +40,8 @@ if ('hp' == $key) $class = 'Cygnus\DrushExport\PMMI\HP';
 if ('oem' == $key) $class = 'Cygnus\DrushExport\PMMI\OEM';
 if ('pw' == $key) $class = 'Cygnus\DrushExport\PMMI\PW';
 if ('pfw' == $key) $class = 'Cygnus\DrushExport\PMMI\PFW';
+if ('id' == $key) $class = 'Cygnus\DrushExport\PMMI\ID';
+if ('mnet' == $key) $class = 'Cygnus\DrushExport\PMMI\MNET';
 
 $export = new $class($key, $dsn);
 $export->execute();

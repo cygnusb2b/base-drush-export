@@ -927,7 +927,7 @@ class ExportD75 extends AbstractExport
      * Creates an image to create as Asset in base4
      *
      */
-    protected function createImage(array $img, $caption = null)
+    protected function createImage($img, $caption = null)
     {
         if ((int) $img['fid'] === 0) {
             return;
