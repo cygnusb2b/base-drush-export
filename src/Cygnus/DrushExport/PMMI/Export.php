@@ -503,6 +503,164 @@ abstract class Export extends AbstractExport
     }
 
     /**
+     * Handles images
+     */
+    protected function convertImages(&$node, $nodeArray)
+    {
+        $images = [];
+        $fields = [
+            // Primary refs
+            'field_image',
+            'field_featured_image',
+            'field_cover_image',
+            'field_viddler_id',
+            'field_product_image',
+            // Normal refs
+            'field_article_images',
+            'field_sponsors',
+            'field_360_multi_upload',
+            'field_digital_cover_image',
+            'field_events_thumbnail_default',
+            'field_medium_landscape',
+            'field_newsletter_ad_rev_image',
+            'field_newsletter_banner_image',
+            'field_newsletter_boombox_image',
+            'field_newsletter_text_ad_image',
+        ];
+
+        $language = $node->language ? $node->language : 'und';
+
+        foreach ($fields as $field) {
+            $items = $this->resolveDotNotation($nodeArray, sprintf('%s.%s', $field, $language), []);
+            if (!empty($items)) {
+                foreach ($items as $image) {
+                    $fp = $this->createImage($image);
+                    $this->pushImageRef($node, $fp);
+                }
+            }
+            unset($node->{$field});
+        }
+    }
+
+    protected function pushImageRef(&$node, $fp)
+    {
+        $node->legacy['refs']['images']['common'][] = $fp;
+        if (!isset($node->legacy['refs']['primaryImage']['common'])) {
+            $node->legacy['refs']['primaryImage']['common'] = $fp;
+        }
+    }
+
+    /**
+     * Handles
+     */
+    protected function handleParagraphs(&$node, $paragraphs)
+    {
+        if ($paragraphs) {
+            $items = [];
+            $ids = array_map(function($arr) { return $arr['value']; }, $paragraphs);
+            foreach ($ids as $id) {
+                $item = @paragraphs_item_load($id);
+                if (!$item) continue;
+                $itemArray = json_decode(json_encode($item, 512), true);
+                switch ($item->bundle) {
+                    case 'embedded_text':
+                        $items[] = $this->resolveDotNotation($itemArray, 'field_embedded_text.und.0.value');
+                        break;
+                    case 'embedded_image':
+                        $caption = $this->resolveDotNotation($itemArray, 'field_embedded_image_caption.und.0');
+                        $image = $this->resolveDotNotation($itemArray, 'field_paragraphs_embedded_image.und.0');
+                        if ($image) {
+                            $fp = $this->createImage($image);
+                            $this->pushImageRef($node, $fp);
+                            $items[] = sprintf('<div class="embedded-image"><img src="%s" class="embedded-image" alt="%s" /></div>', $fp, $caption);
+                        }
+                        break;
+                    case 'headshot_widget':
+                        $author = $this->resolveDotNotation($itemArray, 'field_author.und.0');
+                        $image = $this->resolveDotNotation($itemArray, 'field_image.und.0');
+                        $jobTitle = $this->resolveDotNotation($itemArray, 'field_job_title.und.0');
+                        $caption = $jobTitle ? sprintf('%s, %s', $author, $jobTitle) : $author;
+                        if ($image) {
+                            $fp = $this->createImage($image);
+                            $this->pushImageRef($node, $fp);
+                            $items[] = sprintf('<div class="embedded-image"><img src="%s" class="embedded-image" data-align="right" alt="%s" /></div>', $fp, $caption);
+                        }
+                        break;
+                    case 'embedded_video':
+                        $embed = $this->resolveDotNotation($itemArray, 'field_embedded_video_code.und.0.value');
+                        if ($node->type === 'Video') {
+                            $node->embedCode = $embed;
+                        } else {
+                            $items[] = sprintf('<div class="embedded-video">%s</div>', $embed);
+                        }
+                        break;
+                    case 'embedded_twitter_card':
+                        $markup = $this->resolveDotNotation($itemArray, 'field_twitter_card_html_markup.und.0.value');
+                        if (preg_match_all('/href="(.+?)"/i', $markup, $matches) > 0) {
+                            $url = array_pop($matches[1]);
+                            $items[] = sprintf('%%{[ data-embed-type="oembed" data-embed-id="%s" data-embed-element="aside" ]}%%', $url);
+                        } else {
+                            $items[] = $markup;
+                        }
+                        break;
+                    case 'embedded_instagram_card':
+                        $markup = $this->resolveDotNotation($itemArray, 'field_instagram_card_html_markup.und.0.value');
+                        if (preg_match_all('/src="(.+?)"/i', $markup, $matches) > 0) {
+                            $url = array_pop($matches[1]);
+                            $items[] = sprintf('%%{[ data-embed-type="oembed" data-embed-id="%s" data-embed-element="aside" ]}%%', $url);
+                        } else {
+                            $items[] = $markup;
+                        }
+                        break;
+                    case 'sidebar':
+                        $caption = $this->resolveDotNotation($itemArray, 'field_embedded_text.und.0');
+                        $image = $this->resolveDotNotation($itemArray, 'field_image.und.0');
+                        if ($image) {
+                            $fp = $this->createImage($image);
+                            $this->pushImageRef($node, $fp);
+                            $items[] = sprintf('<div class="embedded-image"><img src="%s" class="embedded-image" data-align="right" alt="%s" /></div>', $fp, $caption);
+                        } else {
+                            $node->sidebars[] = $caption;
+                        }
+                        break;
+                    case 'embedded_storify_widget':
+                        $markup = $this->resolveDotNotation($itemArray, 'field_embed_code.und.0.value');
+                        $items[] = $markup;
+                        break;
+                    case 'embedded_photo_gallery':
+                        $gallery = $this->resolveDotNotation($itemArray, 'field_embedded_gallery.und');
+                        if (!$gallery) break;
+                        foreach ($gallery as $image) {
+                            if (!$image) continue;
+                            $caption = $this->resolveDotNotation($image, 'field_file_image_caption_text.und.0.value');
+                            $alt = $this->resolveDotNotation($image, 'field_file_image_alt_text.und.0.value');
+                            $title = $this->resolveDotNotation($image, 'field_file_image_title_text.und.0.value');
+                            $title = $image['title'] ? $image['title'] : $title;
+                            $fp = $this->createImage($image);
+                            $this->pushImageRef($node, $fp);
+                            $items[] = sprintf('<div class="embedded-image"><img src="%s" class="embedded-image" title="%s" caption="%s" alt="%s" /></div>', $fp, $title, $caption, $alt);
+                        }
+                        break;
+                    case 'downloadable_file':
+                        $file = $this->resolveDotNotation($itemArray, 'field_downloadable_file.und.0');
+                        $description = $this->resolveDotNotation($itemArray, 'field_file_description.und.0');
+                        if ($file) {
+                            $fp = $this->createAsset($file, $description);
+                            $node->legacy['refs']['assets']['common'][] = $fp;
+                            $items[] = sprintf('<div class="embedded-document"><a href="%s">%s</a></div>', $fp, $description);
+                        }
+                        break;
+                    default:
+                        var_dump($item, $node->_id);
+                        throw new \Exception(sprintf('Unknown paragraph type %s', $item->bundle));
+                }
+            }
+            $node->body = join("\n", $items);
+        }
+        unset($node->field_body_paragraphs);
+    }
+
+    /**
      * {@inheritdoc}
      *
      * Reformats node data into consumable fields
@@ -579,6 +737,9 @@ abstract class Export extends AbstractExport
             unset($node->body);
         }
 
+        $paragraphs = $this->resolveDotNotation($nodeArray, 'field_body_paragraphs.und');
+        $this->handleParagraphs($node, $paragraphs);
+
         // teaser
         $teaser = $this->resolveDotNotation($nodeArray, 'field_deckhead.und.0.value');
         if (!empty($teaser)) $node->teaser = $teaser;
@@ -602,55 +763,7 @@ abstract class Export extends AbstractExport
             $node->legacy['refs']['authors'][$legacySource][] = trim($author);
         }
 
-        // Images
-        $primary = $this->resolveDotNotation($nodeArray, 'field_image.und.0');
-        if ($primary) {
-            $fp = $this->createImage($primary);
-            $node->legacy['refs']['primaryImage']['common'] = $fp;
-        }
-        unset($node->field_image);
-
-        $featured = $this->resolveDotNotation($nodeArray, 'field_featured_image.und.0');
-        if ($featured) {
-            $fp = $this->createImage($featured);
-            $node->legacy['refs']['primaryImage']['common'] = $fp;
-        }
-        unset($node->field_featured_image);
-
-        $cover = $this->resolveDotNotation($nodeArray, 'field_cover_image.und.0');
-        if ($cover) {
-            $fp = $this->createImage($cover);
-            $node->legacy['refs']['primaryImage']['common'] = $fp;
-        }
-        unset($node->field_cover_image);
-
-        $images = $this->resolveDotNotation($nodeArray, 'field_article_images.und');
-        if (!empty($images)) {
-            foreach ($images as $image) {
-                $fp = $this->createImage($image);
-                $node->legacy['refs']['images']['common'][] = $fp;
-            }
-        }
-        unset($node->field_article_images);
-
-        // @todo should this be only for PFW??
-        $images = $this->resolveDotNotation($nodeArray, 'field_sponsors.und');
-        if (!empty($images)) {
-            foreach ($images as $image) {
-                $fp = $this->createImage($image);
-                $node->legacy['refs']['images']['common'][] = $fp;
-            }
-        }
-        unset($node->field_sponsors);
-
-        $images = $this->resolveDotNotation($nodeArray, 'field_360_multi_upload.und');
-        if (!empty($images)) {
-            foreach ($images as $image) {
-                $fp = $this->createImage($image);
-                $node->legacy['refs']['images']['common'][] = $fp;
-            }
-        }
-        unset($node->field_360_multi_upload);
+        $this->convertImages($node, $nodeArray);
 
         $companies = $this->resolveDotNotation($nodeArray, 'field_companies.und');
         if (!empty($companies)) {
@@ -788,15 +901,9 @@ abstract class Export extends AbstractExport
         // Videos
         // field_white_paper // Exist on Videos, contain youtube links??
         $viddler = $this->resolveDotNotation($nodeArray, 'field_viddler_id.und.0');
-        if ($viddler) {
-            $fp = $this->createImage($viddler, null, $node->created);
-            $node->legacy['refs']['primaryImage']['common'] = $fp;
-            $node->legacy['refs']['images']['common'][] = $fp;
-            $node->embedCode = $viddler['embed_code'];
-        }
+        if ($viddler) $node->embedCode = $viddler['embed_code'];
 
         // Whitepapers
-        // field_whitepaper
 
         // Document
         // field_top_copy
@@ -895,153 +1002,14 @@ abstract class Export extends AbstractExport
         if ($byline) $node->byline = $byline;
         unset($node->field_contributed_author);
 
-
-        // Paragraphs module
-        $paragraphs = $this->resolveDotNotation($nodeArray, 'field_body_paragraphs.und');
-        if ($paragraphs) {
-            $items = [];
-            $ids = array_map(function($arr) { return $arr['value']; }, $paragraphs);
-            foreach ($ids as $id) {
-                $item = @paragraphs_item_load($id);
-                if (!$item) continue;
-                $itemArray = json_decode(json_encode($item, 512), true);
-                switch ($item->bundle) {
-                    case 'embedded_text':
-                        $items[] = $this->resolveDotNotation($itemArray, 'field_embedded_text.und.0.value');
-                        break;
-                    case 'embedded_image':
-                        $caption = $this->resolveDotNotation($itemArray, 'field_embedded_image_caption.und.0');
-                        $image = $this->resolveDotNotation($itemArray, 'field_paragraphs_embedded_image.und.0');
-                        if ($image) {
-                            $fp = $this->createImage($image);
-                            $node->legacy['refs']['images']['common'][] = $fp;
-                            $items[] = sprintf('<div class="embedded-image"><img src="%s" class="embedded-image" alt="%s" /></div>', $fp, $caption);
-                        }
-                        break;
-                    case 'headshot_widget':
-                        $author = $this->resolveDotNotation($itemArray, 'field_author.und.0');
-                        $image = $this->resolveDotNotation($itemArray, 'field_image.und.0');
-                        $jobTitle = $this->resolveDotNotation($itemArray, 'field_job_title.und.0');
-                        $caption = $jobTitle ? sprintf('%s, %s', $author, $jobTitle) : $author;
-                        if ($image) {
-                            $fp = $this->createImage($image);
-                            $node->legacy['refs']['images']['common'][] = $fp;
-                            $items[] = sprintf('<div class="embedded-image"><img src="%s" class="embedded-image" data-align="right" alt="%s" /></div>', $fp, $caption);
-                        }
-                        break;
-                    case 'embedded_video':
-                        $embed = $this->resolveDotNotation($itemArray, 'field_embedded_video_code.und.0.value');
-                        if ($node->type === 'Video') {
-                            $node->embedCode = $embed;
-                        } else {
-                            $items[] = sprintf('<div class="embedded-video">%s</div>', $embed);
-                        }
-                        break;
-                    case 'embedded_twitter_card':
-                        $markup = $this->resolveDotNotation($itemArray, 'field_twitter_card_html_markup.und.0.value');
-                        if (preg_match_all('/href="(.+?)"/i', $markup, $matches) > 0) {
-                            $url = array_pop($matches[1]);
-                            $items[] = sprintf('%%{[ data-embed-type="oembed" data-embed-id="%s" data-embed-element="aside" ]}%%', $url);
-                        } else {
-                            $items[] = $markup;
-                        }
-                        break;
-                    case 'embedded_instagram_card':
-                        $markup = $this->resolveDotNotation($itemArray, 'field_instagram_card_html_markup.und.0.value');
-                        if (preg_match_all('/src="(.+?)"/i', $markup, $matches) > 0) {
-                            $url = array_pop($matches[1]);
-                            $items[] = sprintf('%%{[ data-embed-type="oembed" data-embed-id="%s" data-embed-element="aside" ]}%%', $url);
-                        } else {
-                            $items[] = $markup;
-                        }
-                        break;
-                    case 'sidebar':
-                        $caption = $this->resolveDotNotation($itemArray, 'field_embedded_text.und.0');
-                        $image = $this->resolveDotNotation($itemArray, 'field_image.und.0');
-                        if ($image) {
-                            $fp = $this->createImage($image);
-                            $node->legacy['refs']['images']['common'][] = $fp;
-                            $items[] = sprintf('<div class="embedded-image"><img src="%s" class="embedded-image" data-align="right" alt="%s" /></div>', $fp, $caption);
-                        } else {
-                            $node->sidebars[] = $caption;
-                        }
-                        break;
-                    case 'embedded_storify_widget':
-                        $markup = $this->resolveDotNotation($itemArray, 'field_embed_code.und.0.value');
-                        $items[] = $markup;
-                        break;
-                    case 'embedded_photo_gallery':
-                        $gallery = $this->resolveDotNotation($itemArray, 'field_embedded_gallery.und');
-                        if (!$gallery) break;
-                        foreach ($gallery as $image) {
-                            if (!$image) continue;
-                            $caption = $this->resolveDotNotation($image, 'field_file_image_caption_text.und.0.value');
-                            $alt = $this->resolveDotNotation($image, 'field_file_image_alt_text.und.0.value');
-                            $title = $this->resolveDotNotation($image, 'field_file_image_title_text.und.0.value');
-                            $title = $image['title'] ? $image['title'] : $title;
-                            $fp = $this->createImage($image);
-                            $node->legacy['refs']['images']['common'][] = $fp;
-                            $items[] = sprintf('<div class="embedded-image"><img src="%s" class="embedded-image" title="%s" caption="%s" alt="%s" /></div>', $fp, $title, $caption, $alt);
-                        }
-                        break;
-                    case 'downloadable_file':
-                        $file = $this->resolveDotNotation($itemArray, 'field_downloadable_file.und.0');
-                        $description = $this->resolveDotNotation($itemArray, 'field_file_description.und.0');
-                        if ($file) {
-                            $fp = $this->createAsset($file, $description);
-                            $node->legacy['refs']['assets']['common'][] = $fp;
-                            $items[] = sprintf('<div class="embedded-document"><a href="%s">%s</a></div>', $fp, $description);
-                        }
-                        break;
-                    default:
-                        var_dump($item, $node->_id);
-                        throw new \Exception(sprintf('Unknown paragraph type %s', $item->bundle));
-                }
-            }
-            $node->body = join("\n", $items);
-        }
-        unset($node->field_body_paragraphs);
-
-        // inddist custom
         if ($this->getKey() === 'id') {
             // Change the one stupid "podcast" on id to an article
             if ($node->_id === 20611) $node->type = 'Article';
-
-            $image = $this->resolveDotNotation($nodeArray, 'field_featured_image.und.0');
-            if ($image) {
-                $fp = $this->createImage($image);
-                $node->legacy['refs']['primaryImage']['common'] = $fp;
-            }
-            unset($node->field_featured_image);
-
-            $image = $this->resolveDotNotation($nodeArray, 'field_medium_landscape.und.0');
-            if ($image) {
-                $fp = $this->createImage($image);
-                $node->legacy['refs']['images']['common'][] = $fp;
-            }
-            unset($node->field_medium_landscape);
-
-            $image = $this->resolveDotNotation($nodeArray, 'field_events_thumbnail_default.und.0');
-            if ($image) {
-                $fp = $this->createImage($image);
-                $node->legacy['refs']['images']['common'][] = $fp;
-            }
-            unset($node->field_events_thumbnail_default);
-
-            if ($node->type === 'Promotion') {
-                $linkUrl = $this->resolveDotNotation($nodeArray, 'field_texterity_url.und.0.url');
-                if ($linkUrl) $node->linkUrl = $linkUrl;
-                unset($node->field_texterity_url);
-
-                $image = $this->resolveDotNotation($nodeArray, 'field_digital_cover_image.und.0');
-                if ($image) {
-                    $fp = $this->createImage($image);
-                    $node->legacy['refs']['images']['common'][] = $fp;
-                }
-                unset($node->field_digital_cover_image);
-            }
         }
 
+        $linkUrl = $this->resolveDotNotation($nodeArray, 'field_texterity_url.und.0.url');
+        if ($linkUrl) $node->linkUrl = $linkUrl;
+        unset($node->field_texterity_url);
 
         $email = $this->resolveDotNotation($nodeArray, 'field_email_address.und.0.email');
         if ($email) $node->publicEmail = $email;
@@ -1092,13 +1060,6 @@ abstract class Export extends AbstractExport
         $status = $this->resolveDotNotation($nodeArray, 'field_ad_status.und.0.value');
         if ($status !== null) $node->status = (int) $status;
 
-        $image = $this->resolveDotNotation($nodeArray, 'field_newsletter_text_ad_image.und.0');
-        if ($image) {
-            $fp = $this->createImage($image);
-            $node->legacy['refs']['primaryImage']['common'] = $fp;
-        }
-        unset($node->field_newsletter_text_ad_image);
-
         $date = $this->resolveDotNotation($nodeArray, 'field_ad_dates.und.0.value');
         if ($date) {
             $node->published = date('c', strtotime($date));
@@ -1109,27 +1070,6 @@ abstract class Export extends AbstractExport
         }
         unset($node->field_ad_dates);
 
-        $image = $this->resolveDotNotation($nodeArray, 'field_newsletter_ad_rev_image.und.0');
-        if ($image) {
-            $fp = $this->createImage($image);
-            $node->legacy['refs']['primaryImage']['common'] = $fp;
-        }
-        unset($node->field_newsletter_ad_rev_image);
-
-        $image = $this->resolveDotNotation($nodeArray, 'field_newsletter_banner_image.und.0');
-        if ($image) {
-            $fp = $this->createImage($image);
-            $node->legacy['refs']['primaryImage']['common'] = $fp;
-        }
-        unset($node->field_newsletter_banner_image);
-
-        $image = $this->resolveDotNotation($nodeArray, 'field_newsletter_boombox_image.und.0');
-        if ($image) {
-            $fp = $this->createImage($image);
-            $node->legacy['refs']['primaryImage']['common'] = $fp;
-        }
-        unset($node->field_newsletter_boombox_image);
-
         $whitepaper = $this->resolveDotNotation($nodeArray, 'field_whitepaper.und.0.nid');
         if ($whitepaper) $node->legacy['refs']['relatedTo']['common'][] = $whitepaper;
         unset($node->field_whitepaper);
@@ -1137,13 +1077,6 @@ abstract class Export extends AbstractExport
         $url = $this->resolveDotNotation($nodeArray, 'field_brightcove_url.und.0.url');
         if ($url) $node->embedCode = sprintf('<iframe src="%s"></iframe>', $url);
         unset($node->field_brightcove_url);
-
-        $image = $this->resolveDotNotation($nodeArray, 'field_product_image.und.0');
-        if ($image) {
-            $fp = $this->createImage($image);
-            $node->legacy['refs']['primaryImage']['common'] = $fp;
-        }
-        unset($node->field_product_image);
 
         $file = $this->resolveDotNotation($nodeArray, 'field_product_data_sheet.und.0');
         if ($file) {
@@ -1182,76 +1115,7 @@ abstract class Export extends AbstractExport
         }
         unset($node->field_lead_gen_file);
 
-        // $oldFields = ['field_image_caption']; // caption used with field_image
-        // $newFields = ['_id', 'type', 'legacy', ];
-        // foreach ($this->map['structure'] AS $baseFieldName => $drupalFieldNames) {
-        //     $newFields[] = $baseFieldName;
-        //     if (!is_array($drupalFieldNames)) $drupalFieldNames = (array)$drupalFieldNames;
-
-        //     // dot notation drupal fields will remove fromt the root element (body.value will remove body and all children unless body is in the newField list as well)
-        //     foreach ($drupalFieldNames AS &$drupalFieldName) {
-        //         $drupalFieldName = explode('.', $drupalFieldName)[0];
-        //     }
-        //     $oldFields = array_unique(array_merge($oldFields, $drupalFieldNames));
-        // }
-        // $removeFields = array_diff($oldFields, $newFields);
-        // foreach ($removeFields AS $removeField) {
-        //     unset($node->$removeField);
-        // }
-        // $nodeFields = array_keys($nodeArray);
-
-        // // don't move fields that are in the newField (B4) list
-        // $moveFields = array_diff($nodeFields, $newFields);
-
-        // // don't move fields that were sources from the oldField (D7) list
-        // $moveFields = array_diff($moveFields, $oldFields);
-
-        // foreach ($moveFields AS $moveField) {
-        //     $unsupportedFields[$moveField] = $node->$moveField;
-        //     unset($node->$moveField);
-        // }
-        // $node->legacy['unsupportedFields'] = $unsupportedFields;
         $this->removeCrapFields($node);
-
-        // $ok = [
-        //     // 'Company',
-        //     // 'News',
-        //     // 'PressRelease',
-        //     // 'Article',
-        //     // 'News',
-        //     // 'Blog',
-        //     // 'Video',
-        //     // 'Promotion',
-        //     // 'Event',
-        //     // 'Page',
-        //     // 'Contact'
-        //     'Webinar',
-        //     'Whitepaper',
-        //     'Promotion',
-        // ];
-        // if (!in_array($node->type, $ok)) {
-        //     // var_dump($node->type, $node->_id);
-
-        //     // INDM
-        //     $fields = [
-        //         // 'field_whitepaper_full_text',   // Case Study
-        //         // 'field_lead_gen_file',
-        //         // 'field_unbounce_url',
-        //         // 'field_lead_gen_item_type',
-        //     ];
-
-        //     if (!empty($fields)) {
-        //         foreach ($fields as $field) {
-        //             $val = $this->resolveDotNotation($nodeArray, sprintf('%s.und', $field));
-        //             var_dump($field, $val);
-        //         }
-        //         die(__METHOD__);
-        //     }
-
-        //     var_dump($node);
-        //     throw new \InvalidArgumentException(sprintf('Unsupported type %s', $node->type));
-        //     die(__METHOD__);
-        // }
     }
 
     protected function createAsset($file, $type = 'Document', $title = null)
