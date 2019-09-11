@@ -20,7 +20,7 @@ class ID extends Export
         'id'  => [
             'name'      => 'Industrial Distribution',
             'database'  => 'drupal_indm_id',
-            'uri'       => 'https://www.industrialdistribution.com',
+            'uri'       => 'https://www.inddist.com',
             'Issue'     => [
                 // 'digital_editions' => 'Magazine\\Issue',
                 // These are promotional links to stories within a digital edition
@@ -35,22 +35,19 @@ class ID extends Export
             'Content'   => [
                 'company_profiles'          => 'Website\Content\Company',    // OK
                 'content_item'              => 'Website\Content\Article',    // OK
-                // 'digital_editions'          => 'Website\Content\Promotion',
-                // 'events'                    => 'Website\Content\Event',
-                // 'lead_gen_item'                 => '',
-                // 'legacy_content_item'           => '',
-                // 'page'                      => 'Website\Content\Page',
-                // 'abm_pr_anonymous_submissions'  => '',
-                // 'author_page'               => 'Website\Content\Contact',
-                // 'newsletter_ad'             => 'Website\Content\TextAd',
-                // 'newsletter_ad_freeform'    => 'Website\Content\TextAd',
-                // 'newsletter_ad_rev'         => '',
-                // 'newsletter_ad_whitepaper'  => '',
-                // 'newsletter_banner'         => '',
-                // 'newsletter_boombox'        => '',
-                // 'paid_sponsorship'          => '',
-                // 'products'                  => 'Website\Content\Product',
-                // 'webform'                   => '',
+                'events'                    => 'Website\Content\Event',      // OK
+                'page'                      => 'Website\Content\Page',       // OK
+                'author_page'               => 'Website\Content\Contact',    // OK
+                'legacy_content_item'       => 'Website\Content\Article',    // OK
+                'digital_editions'          => 'Website\Content\Promotion',  // OK
+                'newsletter_ad'             => 'Website\Content\TextAd',     // OK
+                'newsletter_ad_freeform'    => 'Website\Content\TextAd',     // OK
+                'newsletter_ad_rev'         => 'Website\Content\TextAd',     // OK
+                'newsletter_ad_whitepaper'  => 'Website\Content\TextAd',     // OK
+                'newsletter_banner'         => 'Website\Content\TextAd',     // OK
+                'newsletter_boombox'        => 'Website\Content\TextAd',     // OK
+                'products'                  => 'Website\Content\Product',    // OK
+                'lead_gen_item'             => 'Website\Content\TextAd',     // OK
             ],
             'Section'   => [
                 // 'page' => 'Website\\Section',

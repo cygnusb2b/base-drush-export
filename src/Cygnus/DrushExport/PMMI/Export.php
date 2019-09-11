@@ -42,7 +42,7 @@ abstract class Export extends AbstractExport
 
         // $this->importWebsiteSectionNodes();
         $this->importMagazineIssueNodes();
-        $this->importContentNodes(100);
+        $this->importContentNodes();
 
         $this->outdent();
     }
@@ -274,6 +274,14 @@ abstract class Export extends AbstractExport
             unset($node->field_taxonomy);
         }
 
+        if (isset($node->field_product_companies)) {
+            $terms = $this->getFieldValue($node->field_product_companies, $node, []);
+            foreach ($terms as $tax) {
+                $taxonomy[] = (String) $tax['tid'];
+            }
+            unset($node->field_product_companies);
+        }
+
         $taxonomy = array_map(function($tid) {
             $term = taxonomy_term_load($tid);
             return sprintf('%s_%s', $term->vid, $tid);
@@ -348,7 +356,7 @@ abstract class Export extends AbstractExport
             $this->convertScheduling($node);
             $this->convertFields($node);
             $set = json_decode(json_encode($node, 512), true);
-            $dateFields = ['created', 'updated', 'published', 'unpublished'];
+            $dateFields = ['created', 'updated', 'published', 'unpublished', 'startDate', 'endDate'];
             foreach ($dateFields as $field) {
                 if (isset($set[$field])) {
                     $set[$field] = new UTCDateTime((int) $set[$field] * 1000);
@@ -507,20 +515,32 @@ abstract class Export extends AbstractExport
         $node->type = str_replace('Website\\Content\\', '', $this->map['Content'][$node->type]);
         $tid = $this->resolveDotNotation($nodeArray, 'field_term_subtype.und.0.tid');
         if (!$tid) $tid = $this->resolveDotNotation($nodeArray, 'field_content_item_type.und.0.tid');
+        if (!$tid) $tid = $this->resolveDotNotation($nodeArray, 'field_lead_gen_item_type.und.0.tid');
         if ($tid) {
             if (!isset($this->term_cache[$tid])) {
                 $type = taxonomy_term_load($tid);
                 $this->term_cache[$tid] = $type->name;
             }
             $type = $this->term_cache[$tid];
+
             if (in_array($type, ['News'])) $node->type = 'News';
             if (in_array($type, ['Podcast'])) $node->type = 'Podcast';
             if (in_array($type, ['Videos'])) $node->type = 'Video';
             if (in_array($type, ['Blog', 'Perspective', 'Column', 'Column/Opinion'])) $node->type = 'Blog';
             if (in_array($type, ['Industry Brief', 'Product Announcement', 'Controls Product Brief', 'Machine Product Brief', 'Materials Product Brief', 'Product Brief', 'Supplier News'])) $node->type = 'PressRelease';
+            if (in_array($type, ['Webinar'])) $node->type = 'Webinar';
+            if (in_array($type, ['White Paper', 'Case Study', 'Research Report', 'eBook', 'iReport'])) $node->type = 'Whitepaper';
+            if (in_array($type, ['Infographic'])) $node->type = 'Promotion';
+            if ($this->getKey() === 'id' && $nodeArray['type'] === 'lead_gen_item') {
+                if ($type === 'Video') $node->type = 'Promotion';
+            }
             // @todo review additional types for OEM, PFW, PW
             unset($node->field_term_subtype);
             unset($node->field_content_item_type);
+        } else {
+            if ($this->getKey() === 'id' && $nodeArray['type'] === 'lead_gen_item') {
+                $node->type = 'Promotion';
+            }
         }
 
         // _id
@@ -857,7 +877,19 @@ abstract class Export extends AbstractExport
                 $node->allDay = true;
             }
         }
+        unset($node->field_event_date);
 
+        $date = $this->resolveDotNotation($nodeArray, 'field_date.und.0.value');
+        if ($date) {
+            $node->startDate = date('c', strtotime($date));
+            $end = $this->resolveDotNotation($nodeArray, 'field_date.und.0.value2');
+            if ($end) {
+                $node->endDate = date('c', strtotime($end));
+            } else {
+                $node->allDay = true;
+            }
+        }
+        unset($node->field_date);
 
         $byline = $this->resolveDotNotation($nodeArray, 'field_contributed_author.und.0.value');
         if ($byline) $node->byline = $byline;
@@ -970,9 +1002,185 @@ abstract class Export extends AbstractExport
         }
         unset($node->field_body_paragraphs);
 
-        // Change the one stupid "podcast" on id to an article
-        if ($node->_id === 20611) $node->type = 'Article';
+        // inddist custom
+        if ($this->getKey() === 'id') {
+            // Change the one stupid "podcast" on id to an article
+            if ($node->_id === 20611) $node->type = 'Article';
 
+            $image = $this->resolveDotNotation($nodeArray, 'field_featured_image.und.0');
+            if ($image) {
+                $fp = $this->createImage($image);
+                $node->legacy['refs']['primaryImage']['common'] = $fp;
+            }
+            unset($node->field_featured_image);
+
+            $image = $this->resolveDotNotation($nodeArray, 'field_medium_landscape.und.0');
+            if ($image) {
+                $fp = $this->createImage($image);
+                $node->legacy['refs']['images']['common'][] = $fp;
+            }
+            unset($node->field_medium_landscape);
+
+            $image = $this->resolveDotNotation($nodeArray, 'field_events_thumbnail_default.und.0');
+            if ($image) {
+                $fp = $this->createImage($image);
+                $node->legacy['refs']['images']['common'][] = $fp;
+            }
+            unset($node->field_events_thumbnail_default);
+
+            if ($node->type === 'Promotion') {
+                $linkUrl = $this->resolveDotNotation($nodeArray, 'field_texterity_url.und.0.url');
+                if ($linkUrl) $node->linkUrl = $linkUrl;
+                unset($node->field_texterity_url);
+
+                $image = $this->resolveDotNotation($nodeArray, 'field_digital_cover_image.und.0');
+                if ($image) {
+                    $fp = $this->createImage($image);
+                    $node->legacy['refs']['images']['common'][] = $fp;
+                }
+                unset($node->field_digital_cover_image);
+            }
+        }
+
+
+        $email = $this->resolveDotNotation($nodeArray, 'field_email_address.und.0.email');
+        if ($email) $node->publicEmail = $email;
+        if ($email) $node->email = $email;
+        unset($node->field_email_address);
+
+        $jobTitle = $this->resolveDotNotation($nodeArray, 'field_job_title.und.0.value');
+        if ($jobTitle) $node->title = $jobTitle;
+        unset($node->field_job_title);
+
+        $phone = $this->resolveDotNotation($nodeArray, 'field_phone_number.und.0.value');
+        if ($phone) $node->phone = $phone;
+        unset($node->field_phone_number);
+
+        $twitter = $this->resolveDotNotation($nodeArray, 'field_twitter_handle.und.0.value');
+        if ($twitter) $node->socialLinks[] = [
+            'provider'  => 'twitter',
+            'label'     => 'Twitter',
+            'url'       => sprintf('https://twitter.com/%s', str_replace('@', '', $twitter))
+        ];
+        unset($node->field_twitter_handle);
+
+        if ($node->type === 'Contact') {
+            list($firstName, $lastName) = explode(' ', $node->name, 2);
+            $node->firstName = $firstName;
+            $node->lastName = $lastName;
+        }
+
+        $company = $this->resolveDotNotation($nodeArray, 'field_company_profile_reference.und.0.nid');
+        if ($company) $node->legacy['refs']['company']['common'] = $company;
+        unset($node->field_company_profile_reference);
+
+        $cta = $this->resolveDotNotation($nodeArray, 'field_call_to_action_link.und.0');
+        if ($cta) {
+            $node->linkText = $cta['title'];
+            $node->linkUrl = $cta['url'];
+        }
+        unset($node->field_call_to_action_link);
+
+        $body = $this->resolveDotNotation($nodeArray, 'field_copy_text.und.0.value');
+        if ($body) $node->body = $body;
+        unset($node->field_copy_text);
+
+        $teaser = $this->resolveDotNotation($nodeArray, 'field_headline_text.und.0.value');
+        if ($teaser) $node->teaser = $teaser;
+        unset($node->field_headline_text);
+
+        $status = $this->resolveDotNotation($nodeArray, 'field_ad_status.und.0.value');
+        if ($status !== null) $node->status = (int) $status;
+
+        $image = $this->resolveDotNotation($nodeArray, 'field_newsletter_text_ad_image.und.0');
+        if ($image) {
+            $fp = $this->createImage($image);
+            $node->legacy['refs']['primaryImage']['common'] = $fp;
+        }
+        unset($node->field_newsletter_text_ad_image);
+
+        $date = $this->resolveDotNotation($nodeArray, 'field_ad_dates.und.0.value');
+        if ($date) {
+            $node->published = date('c', strtotime($date));
+            $end = $this->resolveDotNotation($nodeArray, 'field_ad_dates.und.0.value2');
+            if ($end) {
+                $node->unpublished = date('c', strtotime($end));
+            }
+        }
+        unset($node->field_ad_dates);
+
+        $image = $this->resolveDotNotation($nodeArray, 'field_newsletter_ad_rev_image.und.0');
+        if ($image) {
+            $fp = $this->createImage($image);
+            $node->legacy['refs']['primaryImage']['common'] = $fp;
+        }
+        unset($node->field_newsletter_ad_rev_image);
+
+        $image = $this->resolveDotNotation($nodeArray, 'field_newsletter_banner_image.und.0');
+        if ($image) {
+            $fp = $this->createImage($image);
+            $node->legacy['refs']['primaryImage']['common'] = $fp;
+        }
+        unset($node->field_newsletter_banner_image);
+
+        $image = $this->resolveDotNotation($nodeArray, 'field_newsletter_boombox_image.und.0');
+        if ($image) {
+            $fp = $this->createImage($image);
+            $node->legacy['refs']['primaryImage']['common'] = $fp;
+        }
+        unset($node->field_newsletter_boombox_image);
+
+        $whitepaper = $this->resolveDotNotation($nodeArray, 'field_whitepaper.und.0.nid');
+        if ($whitepaper) $node->legacy['refs']['relatedTo']['common'][] = $whitepaper;
+        unset($node->field_whitepaper);
+
+        $url = $this->resolveDotNotation($nodeArray, 'field_brightcove_url.und.0.url');
+        if ($url) $node->embedCode = sprintf('<iframe src="%s"></iframe>', $url);
+        unset($node->field_brightcove_url);
+
+        $image = $this->resolveDotNotation($nodeArray, 'field_product_image.und.0');
+        if ($image) {
+            $fp = $this->createImage($image);
+            $node->legacy['refs']['primaryImage']['common'] = $fp;
+        }
+        unset($node->field_product_image);
+
+        $file = $this->resolveDotNotation($nodeArray, 'field_product_data_sheet.und.0');
+        if ($file) {
+            $fp = $this->createAsset($file);
+            $node->legacy['refs']['relatedTo']['common'][] = $fp;
+        }
+        unset($node->field_product_data_sheet);
+
+        $url = $this->resolveDotNotation($nodeArray, 'field_website_deep_link.und.0.url');
+        if ($url) $node->website = $url;
+        unset($node->field_website_deep_link);
+
+        $partNumber = $this->resolveDotNotation($nodeArray, 'field_product_part_number.und.0.value');
+        if ($partNumber) $node->partNumber = $partNumber;
+        unset($node->field_product_part_number);
+
+        $msrp = $this->resolveDotNotation($nodeArray, 'field_list_price.und.0.value');
+        if ($msrp) $node->msrp = $msrp;
+        unset($node->field_list_price);
+
+        $url = $this->resolveDotNotation($nodeArray, 'field_unbounce_url.und.0.url');
+        if ($url) {
+            $field = (in_array($node->type, ['Webinar', 'Whitepaper', 'Promotion'])) ? 'linkUrl' : 'website';
+            $node->{$field} = $url;
+        }
+        unset($node->field_unbounce_url);
+
+        $body = $this->resolveDotNotation($nodeArray, 'field_whitepaper_full_text.und.0.value');
+        if ($body) $node->body = $body;
+        unset($node->field_whitepaper_full_text);
+
+        $file = $this->resolveDotNotation($nodeArray, 'field_lead_gen_file.und.0');
+        if ($file) {
+            $fp = $this->createAsset($file);
+            $node->legacy['refs']['relatedTo']['common'][] = $fp;
+        }
+        unset($node->field_lead_gen_file);
 
         // $oldFields = ['field_image_caption']; // caption used with field_image
         // $newFields = ['_id', 'type', 'legacy', ];
@@ -1005,24 +1213,45 @@ abstract class Export extends AbstractExport
         // $node->legacy['unsupportedFields'] = $unsupportedFields;
         $this->removeCrapFields($node);
 
-        $ok = ['Company', 'News', 'PressRelease', 'Article', 'Blog', 'Video'];
-        if (!in_array($node->type, $ok)) {
-            // var_dump($node->type, $node->_id);
+        // $ok = [
+        //     // 'Company',
+        //     // 'News',
+        //     // 'PressRelease',
+        //     // 'Article',
+        //     // 'News',
+        //     // 'Blog',
+        //     // 'Video',
+        //     // 'Promotion',
+        //     // 'Event',
+        //     // 'Page',
+        //     // 'Contact'
+        //     'Webinar',
+        //     'Whitepaper',
+        //     'Promotion',
+        // ];
+        // if (!in_array($node->type, $ok)) {
+        //     // var_dump($node->type, $node->_id);
 
-            // INDM
-            // $fields = [
-            //     'field_body_paragraphs',
-            // ];
+        //     // INDM
+        //     $fields = [
+        //         // 'field_whitepaper_full_text',   // Case Study
+        //         // 'field_lead_gen_file',
+        //         // 'field_unbounce_url',
+        //         // 'field_lead_gen_item_type',
+        //     ];
 
-            // foreach ($fields as $field) {
-            //     $val = $this->resolveDotNotation($nodeArray, sprintf('%s.und', $field));
-            //     var_dump($field, $val);
-            // }
-            // die(__METHOD__);
-            var_dump($node);
-            throw new \InvalidArgumentException(sprintf('Unsupported type %s', $node->type));
-            die(__METHOD__);
-        }
+        //     if (!empty($fields)) {
+        //         foreach ($fields as $field) {
+        //             $val = $this->resolveDotNotation($nodeArray, sprintf('%s.und', $field));
+        //             var_dump($field, $val);
+        //         }
+        //         die(__METHOD__);
+        //     }
+
+        //     var_dump($node);
+        //     throw new \InvalidArgumentException(sprintf('Unsupported type %s', $node->type));
+        //     die(__METHOD__);
+        // }
     }
 
     protected function createAsset($file, $type = 'Document', $title = null)
