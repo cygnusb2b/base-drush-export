@@ -288,7 +288,7 @@ abstract class Export extends AbstractExport
         }, $taxonomy);
 
         // straight to legacy refs for resolution in base postimport segment
-        if (!empty($taxonomy)) $node->legacy['refs']['taxonomy'] = $taxonomy;
+        if (!empty($taxonomy)) $node->legacy['refs']['taxonomy'][$this->getKey()] = $taxonomy;
     }
 
     /**
@@ -467,7 +467,7 @@ abstract class Export extends AbstractExport
             if (!$image) $image = $this->resolveDotNotation($nodeArray, 'field_digital_cover_image.und.0');
             if ($image) {
                 $fp = $this->createImage($image);
-                $set['legacy']['refs']['coverImage']['common'] = $fp;
+                $set['legacy']['refs']['coverImage'][$this->getKey()] = $fp;
             }
 
             // digital edition links
@@ -544,9 +544,9 @@ abstract class Export extends AbstractExport
 
     protected function pushImageRef(&$node, $fp)
     {
-        $node->legacy['refs']['images']['common'][] = $fp;
-        if (!isset($node->legacy['refs']['primaryImage']['common'])) {
-            $node->legacy['refs']['primaryImage']['common'] = $fp;
+        $node->legacy['refs']['images'][$this->getKey()][] = $fp;
+        if (!isset($node->legacy['refs']['primaryImage'][$this->getKey()])) {
+            $node->legacy['refs']['primaryImage'][$this->getKey()] = $fp;
         }
     }
 
@@ -646,7 +646,7 @@ abstract class Export extends AbstractExport
                         $description = $this->resolveDotNotation($itemArray, 'field_file_description.und.0');
                         if ($file) {
                             $fp = $this->createAsset($file, $description);
-                            $node->legacy['refs']['assets']['common'][] = $fp;
+                            $node->legacy['refs']['assets'][$this->getKey()][] = $fp;
                             $items[] = sprintf('<div class="embedded-document"><a href="%s">%s</a></div>', $fp, $description);
                         }
                         break;
@@ -706,8 +706,8 @@ abstract class Export extends AbstractExport
         $node->name = $node->title;
         $node->status = (int) $node->status;
 
-        $node->legacy['refs']['createdBy']['aw_user'] = $node->uid;
-        $node->legacy['refs']['updatedBy']['aw_user'] = $node->revision_uid;
+        $node->legacy['refs']['createdBy'][$this->getKey()] = $node->uid;
+        $node->legacy['refs']['updatedBy'][$this->getKey()] = $node->revision_uid;
 
         $node->created = (int) $node->created;
         $node->updated = (int) $node->changed;
@@ -759,8 +759,7 @@ abstract class Export extends AbstractExport
                 'lastName' => $last,
                 'title' => $title,
             ]);
-            $legacySource = sprintf('%s_contacts', $this->getKey());
-            $node->legacy['refs']['authors'][$legacySource][] = trim($author);
+            $node->legacy['refs']['authors'][$this->getKey()][] = trim($author);
         }
 
         $this->convertImages($node, $nodeArray);
@@ -768,7 +767,7 @@ abstract class Export extends AbstractExport
         $companies = $this->resolveDotNotation($nodeArray, 'field_companies.und');
         if (!empty($companies)) {
             foreach ($companies as $ref) {
-                $node->legacy['refs']['companies'][] = $ref['nid'];
+                $node->legacy['refs']['companies'][$this->getKey()][] = $ref['nid'];
             }
         }
         unset($node->field_companies);
@@ -782,7 +781,7 @@ abstract class Export extends AbstractExport
                 foreach ($refs as $ref) {
                     $term = taxonomy_term_load($ref['tid']);
                     $id = sprintf('%s_%s', $term->vid, $ref['tid']);
-                    $node->legacy['refs']['taxonomy'][] = [
+                    $node->legacy['refs']['taxonomy'][$this->getKey()][] = [
                         '$ref'  => 'Taxonomy',
                         '$id'   => $id,
                         '$db'   => 'drupal_pmmi_aw',
@@ -798,7 +797,7 @@ abstract class Export extends AbstractExport
             foreach ($allTerms as $ref) {
                 $term = taxonomy_term_load($ref['tid']);
                 $id = sprintf('%s_%s', $term->vid, $ref['tid']);
-                $node->legacy['refs']['taxonomy'][] = [
+                $node->legacy['refs']['taxonomy'][$this->getKey()][] = [
                     '$ref'  => 'Taxonomy',
                     '$id'   =>  $id,
                     '$db'   => 'drupal_pmmi_aw',
@@ -812,7 +811,7 @@ abstract class Export extends AbstractExport
         $relatedTo = $this->resolveDotNotation($nodeArray, 'field_related.und');
         if (!empty($relatedTo)) {
             foreach ($relatedTo as $ref) {
-                $node->legacy['refs']['relatedTo'][] = $ref['nid'];
+                $node->legacy['refs']['relatedTo'][$this->getKey()][] = $ref['nid'];
             }
         }
         unset($node->field_related);
@@ -965,7 +964,7 @@ abstract class Export extends AbstractExport
         if ($tid) {
             $term = taxonomy_term_load($tid);
             $id = sprintf('%s_%s', $term->vid, $tid);
-            $node->legacy['refs']['taxonomy'][] = [
+            $node->legacy['refs']['taxonomy'][$this->getKey()][] = [
                 '$ref'  => 'Taxonomy',
                 '$id'   => $id,
                 '$db'   => 'drupal_pmmi_aw',
@@ -1039,7 +1038,7 @@ abstract class Export extends AbstractExport
         }
 
         $company = $this->resolveDotNotation($nodeArray, 'field_company_profile_reference.und.0.nid');
-        if ($company) $node->legacy['refs']['company']['common'] = $company;
+        if ($company) $node->legacy['refs']['company'][$this->getKey()] = $company;
         unset($node->field_company_profile_reference);
 
         $cta = $this->resolveDotNotation($nodeArray, 'field_call_to_action_link.und.0');
@@ -1071,7 +1070,7 @@ abstract class Export extends AbstractExport
         unset($node->field_ad_dates);
 
         $whitepaper = $this->resolveDotNotation($nodeArray, 'field_whitepaper.und.0.nid');
-        if ($whitepaper) $node->legacy['refs']['relatedTo']['common'][] = $whitepaper;
+        if ($whitepaper) $node->legacy['refs']['relatedTo'][$this->getKey()][] = $whitepaper;
         unset($node->field_whitepaper);
 
         $url = $this->resolveDotNotation($nodeArray, 'field_brightcove_url.und.0.url');
@@ -1081,7 +1080,7 @@ abstract class Export extends AbstractExport
         $file = $this->resolveDotNotation($nodeArray, 'field_product_data_sheet.und.0');
         if ($file) {
             $fp = $this->createAsset($file);
-            $node->legacy['refs']['relatedTo']['common'][] = $fp;
+            $node->legacy['refs']['relatedTo'][$this->getKey()][] = $fp;
         }
         unset($node->field_product_data_sheet);
 
@@ -1111,7 +1110,7 @@ abstract class Export extends AbstractExport
         $file = $this->resolveDotNotation($nodeArray, 'field_lead_gen_file.und.0');
         if ($file) {
             $fp = $this->createAsset($file);
-            $node->legacy['refs']['relatedTo']['common'][] = $fp;
+            $node->legacy['refs']['relatedTo'][$this->getKey()][] = $fp;
         }
         unset($node->field_lead_gen_file);
 
@@ -1142,7 +1141,7 @@ abstract class Export extends AbstractExport
             ],
             'legacy'    => [
                 'id'        => $id,
-                'source'    => sprintf('common'),
+                'source'    => sprintf($this->getKey()),
                 'created'   => $date,
             ]
         ];
@@ -1192,7 +1191,7 @@ abstract class Export extends AbstractExport
             'alt'       => $img['alt'],
             'legacy'    => [
                 'id'        => $id,
-                'source'    => sprintf('common'),
+                'source'    => sprintf($this->getKey()),
                 'created'   => $date,
             ]
         ];
@@ -1310,7 +1309,7 @@ abstract class Export extends AbstractExport
     {
         $contact['type'] = 'Contact';
         $contact['name'] = sprintf('%s %s', $contact['firstName'], $contact['lastName']);
-        $contact['legacy'] = ['id' => $contact['name'], 'source' => 'aw_contacts'];
+        $contact['legacy'] = ['id' => $contact['name'], 'source' => $this->getKey()];
 
         $filter = ['legacy.id' => $contact['name']];
         $update = ['$set' => $contact];
