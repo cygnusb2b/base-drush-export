@@ -717,6 +717,9 @@ abstract class Export extends AbstractExport
         if ($unpublished) $node->unpublished = (int) $unpublished;
         unset($node->field_expiration_date);
 
+        // Handle images
+        $this->convertImages($node, $nodeArray);
+
         // Redirects
         $redirects = &$node->mutations['Website']['redirects'];
         $redirects[] = sprintf('node/%s', $node->_id);
@@ -762,7 +765,6 @@ abstract class Export extends AbstractExport
             $node->legacy['refs']['authors'][$this->getKey()][] = trim($author);
         }
 
-        $this->convertImages($node, $nodeArray);
 
         $companies = $this->resolveDotNotation($nodeArray, 'field_companies.und');
         if (!empty($companies)) {
@@ -1115,6 +1117,17 @@ abstract class Export extends AbstractExport
         unset($node->field_lead_gen_file);
 
         $this->removeCrapFields($node);
+
+
+        // DEBUG TESTING
+        $ok = [
+            // 'News',
+        ];
+        // if (!in_array($node->type, $ok)) {
+        //     var_dump($node);
+        //     die(__METHOD__);
+        // }
+
     }
 
     protected function createAsset($file, $type = 'Document', $title = null)
@@ -1225,7 +1238,7 @@ abstract class Export extends AbstractExport
                 '$set'  => [
                     '_id'   => $vid,
                     'type'  => $type,
-                    'name'  => $vocab->name,
+                    'name'  => sprintf('%s %s', strtoupper($this->getKey()), $vocab->name),
                     'legacy'    => [
                         '_id'       => $vid,
                         'source'    => sprintf('%s_vocab', $this->getKey()),
