@@ -60,8 +60,12 @@ abstract class Export extends AbstractExport
         foreach ($node->legacy['raw'] as $key => $value) {
             if (empty($value)) unset($node->legacy['raw'][$key]);
         }
-        unset($node->legacy['raw']['data']);
-        unset($node->legacy['raw']['rdf_mapping']);
+        $badRaw = ['data', 'rdf_mapping', 'field_alchemy_concepts', 'field_alchemy_entities', 'field_metadescriptionlong', 'field_metakeywordslong'];
+        foreach ($badRaw as $field) {
+            unset($node->legacy['raw'][$field]);
+        }
+        // Remove bodies, some are too long
+        if ($this->getKey() == 'mnet') unset($node->legacy['raw']['body']);
     }
 
     // get drupal field names from base4 names via config map
@@ -373,8 +377,8 @@ abstract class Export extends AbstractExport
             $this->dbal->batchUpsert($this->database, 'Content', $ops);
         };
 
-
-        $this->loop($counter, $retriever, $modifier, $persister, sprintf('Content (%s)', $type), $limit);
+        $skip = 0; // Change to skip aheadz
+        $this->loop($counter, $retriever, $modifier, $persister, sprintf('Content (%s)', $type), $limit, $skip);
     }
 
     /**
@@ -593,6 +597,10 @@ abstract class Export extends AbstractExport
                         } else {
                             $items[] = sprintf('<div class="embedded-video">%s</div>', $embed);
                         }
+                        break;
+                    case 'embedded_audio':
+                        $code = $this->resolveDotNotation($itemArray, 'field_embedded_audio_code.und.0.value');
+                        if ($code) $items[] = sprintf('<div class="embedded-audio">%s</div>', $code);
                         break;
                     case 'embedded_twitter_card':
                         $markup = $this->resolveDotNotation($itemArray, 'field_twitter_card_html_markup.und.0.value');
