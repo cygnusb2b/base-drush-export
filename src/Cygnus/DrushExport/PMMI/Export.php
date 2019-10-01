@@ -18,6 +18,8 @@ use MongoDB\BSON\UTCDateTime;
  */
 abstract class Export extends AbstractExport
 {
+    protected $debugNid;
+
     /**
      * Main export function.
      */
@@ -136,7 +138,9 @@ abstract class Export extends AbstractExport
     {
         $types = $this->formatValues($types);
         $inQuery = implode(',', array_fill(0, count($types), '?'));
-        $query = 'SELECT count(*) as count from {node} where type in ('.$inQuery.')';
+        $debugQuery = ($this->debugNid) ? ' and nid = ' . $this->debugNid : '';
+        $query = sprintf('SELECT count(*) as count from {node} where type in (%s) %s', $inQuery, $debugQuery);
+        if ($this->debugNid) $query .= ' and nid = ' . $this->debugNid;
         $resource = db_query($query, $types);
         $count = reset($this->getRaw($resource));
         return (int) $count->count;
@@ -149,7 +153,8 @@ abstract class Export extends AbstractExport
     {
         $types = $this->formatValues($types);
         $inQuery = implode(',', array_fill(0, count($types), '?'));
-        $query = 'SELECT nid, type from {node} where type in ('.$inQuery.') ORDER BY nid desc';
+        $debugQuery = ($this->debugNid) ? ' and nid = ' . $this->debugNid : '';
+        $query = sprintf('SELECT nid, type from {node} where type in (%s) %s ORDER BY nid desc', $inQuery, $debugQuery);
         if (0 == $limit && $skip == 0) {
             $resource = db_query($query, $types);
         } else {
@@ -668,6 +673,74 @@ abstract class Export extends AbstractExport
         unset($node->field_body_paragraphs);
     }
 
+    protected function handleLeadershipData(&$node)
+    {
+        if ($node->type !== 'company' || !function_exists('leadership_get_corresponding_nid')) return;
+
+        $company = json_decode(json_encode($node, 512), true);
+
+        // Load leadership data
+        $nid = leadership_get_corresponding_nid($node->nid, 'leadership_data_card', $this->getKey());
+        if ($nid) $node->leadershipDataCard = node_load($nid);
+        $nid = leadership_get_corresponding_nid($node->nid, 'leadership_online_profile', $this->getKey());
+        if ($nid) $node->leadershipOnlineProfile = node_load($nid);
+        $nid = leadership_get_corresponding_nid($node->nid, 'leadership_print_profile', $this->getKey());
+        if ($nid) $node->leadershipPrintProfile = node_load($nid);
+
+        // @todo leadership field mapping!
+        //
+        //
+
+        // Leadership scheduling
+        $print = json_decode(json_encode($node->leadershipPrintProfile, 512), true);
+        $sessions = $this->resolveDotNotation($company, 'field_ld_session.und');
+        if (count($sessions)) {
+            $years = array_filter(array_map(function ($o) { return (int) taxonomy_term_load($o['tid'])->name; }, $sessions));
+            var_dump($years);
+            $terms = [];
+            $termKeys = $this->map['leadership']['term_fields'] ? $this->map['leadership']['term_fields'] : ['categories'];
+            foreach ($termKeys as $key) {
+                $key = sprintf('field_ld_%s.und', $key);
+                $tids = array_filter(array_map(function($o) {
+                    $term = taxonomy_term_load($o['tid']);
+                    if (!$term) return false;
+                    return sprintf('%s_%s', $term->vid, $term->tid);
+                }, $this->resolveDotNotation($print, $key, [])));
+                $terms = array_merge($terms, $tids);
+            }
+
+            foreach ($years as $year) {
+                $startDate = strtotime(sprintf('%s-01-01T00:00:00', $year));
+                $endDate = strtotime(sprintf('%s-12-31T23:59:59', $year));
+                foreach ($terms as $term) {
+                    $sectionId = $this->getLeadershipSection($term);
+                    if (!$sectionId) continue;
+                    $legacyId = sprintf('%s_%s', $term, $year);
+                    $this->createScheduleRef($node, $legacyId, $sectionId, $startDate, $endDate);
+                }
+            }
+        }
+    }
+
+    protected function getLeadershipSection($legacyTermId)
+    {
+        return $this->map['leadership']['map'][$legacyTermId];
+    }
+
+    protected function createScheduleRef(&$node, $legacyId, $sectionId, $startDate, $endDate = null)
+    {
+        $kv = [
+            'legacy'    => [
+                'id'        => $legacyId,
+                'source'    => $this->getKey(),
+            ],
+            'section'   => $sectionId,
+            'startDate' => new UTCDateTime((int) $startDate * 1000),
+        ];
+        if ($endDate) $kv['endDate'] = new UTCDateTime((int) $endDate * 1000);
+        $node->legacy['refs']['schedules'][$this->getKey()][] = $kv;
+    }
+
     /**
      * {@inheritdoc}
      *
@@ -675,6 +748,7 @@ abstract class Export extends AbstractExport
      */
     protected function convertFields(&$node)
     {
+        $this->handleLeadershipData($node);
         $nodeArray = json_decode(json_encode($node, 512), true);
 
         // type
