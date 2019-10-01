@@ -225,6 +225,15 @@ class AW extends Export
                 // 'marketsServing'    => 'field_hci100_markets_serving.und.0.value',
                 // 'linkUrl'           => 'function_getRedirects',
             ],
+            'leadership'    => [
+                'term_fields'  => [
+                    'categories_technologies'
+                ],
+                'map'   => [
+                    // @TODO fill in from spreadsheet once mapped!
+                    // '13_2717'   => 1234,
+                ]
+            ]
         ],
     ];
 }
