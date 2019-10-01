@@ -371,6 +371,13 @@ abstract class Export extends AbstractExport
                     $set[$field] = new UTCDateTime((int) $set[$field] * 1000);
                 }
             }
+            if (isset($set['legacy']['refs']['schedules'][$this->getKey()])) {
+                $refs = &$set['legacy']['refs']['schedules'][$this->getKey()];
+                foreach ($refs as &$schedule) {
+                    $schedule['startDate'] = new UTCDateTime((int) $schedule['startDate'] * 1000);
+                    if ($schedule['endDate']) $schedule['endDate'] = new UTCDateTime((int) $schedule['endDate'] * 1000);
+                }
+            }
 
             return [
                 'filter'    => [ '_id'  => $nid ],
@@ -693,10 +700,11 @@ abstract class Export extends AbstractExport
 
         // Leadership scheduling
         $print = json_decode(json_encode($node->leadershipPrintProfile, 512), true);
+        if (!$print) return;
+
         $sessions = $this->resolveDotNotation($company, 'field_ld_session.und');
         if (count($sessions)) {
             $years = array_filter(array_map(function ($o) { return (int) taxonomy_term_load($o['tid'])->name; }, $sessions));
-            var_dump($years);
             $terms = [];
             $termKeys = $this->map['leadership']['term_fields'] ? $this->map['leadership']['term_fields'] : ['categories'];
             foreach ($termKeys as $key) {
@@ -735,9 +743,9 @@ abstract class Export extends AbstractExport
                 'source'    => $this->getKey(),
             ],
             'section'   => $sectionId,
-            'startDate' => new UTCDateTime((int) $startDate * 1000),
+            'startDate' => $startDate,
         ];
-        if ($endDate) $kv['endDate'] = new UTCDateTime((int) $endDate * 1000);
+        if ($endDate) $kv['endDate'] = $endDate;
         $node->legacy['refs']['schedules'][$this->getKey()][] = $kv;
     }
 
