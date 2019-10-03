@@ -59,6 +59,7 @@ abstract class Export extends AbstractExport
             if (empty($value)) unset($node->{$key});
             if (stristr($key, 'field_')) unset($node->{$key});
         }
+        $node->legacy['raw'] = isset($node->legacy['raw']) ? $node->legacy['raw'] : [];
         foreach ($node->legacy['raw'] as $key => $value) {
             if (empty($value)) unset($node->legacy['raw'][$key]);
         }
@@ -680,56 +681,6 @@ abstract class Export extends AbstractExport
         unset($node->field_body_paragraphs);
     }
 
-    protected function handleLeadershipData(&$node)
-    {
-        if ($node->type !== 'company' || !function_exists('leadership_get_corresponding_nid')) return;
-
-        $company = json_decode(json_encode($node, 512), true);
-
-        // Load leadership data
-        $nid = leadership_get_corresponding_nid($node->nid, 'leadership_data_card', $this->getKey());
-        if ($nid) $node->leadershipDataCard = node_load($nid);
-        $nid = leadership_get_corresponding_nid($node->nid, 'leadership_online_profile', $this->getKey());
-        if ($nid) $node->leadershipOnlineProfile = node_load($nid);
-        $nid = leadership_get_corresponding_nid($node->nid, 'leadership_print_profile', $this->getKey());
-        if ($nid) $node->leadershipPrintProfile = node_load($nid);
-
-        // @todo leadership field mapping!
-        //
-        //
-
-        // Leadership scheduling
-        $print = json_decode(json_encode($node->leadershipPrintProfile, 512), true);
-        if (!$print) return;
-
-        $sessions = $this->resolveDotNotation($company, 'field_ld_session.und');
-        if (count($sessions)) {
-            $years = array_filter(array_map(function ($o) { return (int) taxonomy_term_load($o['tid'])->name; }, $sessions));
-            $terms = [];
-            $termKeys = $this->map['leadership']['term_fields'] ? $this->map['leadership']['term_fields'] : ['categories'];
-            foreach ($termKeys as $key) {
-                $key = sprintf('field_ld_%s.und', $key);
-                $tids = array_filter(array_map(function($o) {
-                    $term = taxonomy_term_load($o['tid']);
-                    if (!$term) return false;
-                    return sprintf('%s_%s', $term->vid, $term->tid);
-                }, $this->resolveDotNotation($print, $key, [])));
-                $terms = array_merge($terms, $tids);
-            }
-
-            foreach ($years as $year) {
-                $startDate = strtotime(sprintf('%s-01-01T00:00:00', $year));
-                $endDate = strtotime(sprintf('%s-12-31T23:59:59', $year));
-                foreach ($terms as $term) {
-                    $sectionId = $this->getLeadershipSection($term);
-                    if (!$sectionId) continue;
-                    $legacyId = sprintf('%s_%s', $term, $year);
-                    $this->createScheduleRef($node, $legacyId, $sectionId, $startDate, $endDate);
-                }
-            }
-        }
-    }
-
     protected function getLeadershipSection($legacyTermId)
     {
         return $this->map['leadership']['map'][$legacyTermId];
@@ -747,6 +698,271 @@ abstract class Export extends AbstractExport
         ];
         if ($endDate) $kv['endDate'] = $endDate;
         $node->legacy['refs']['schedules'][$this->getKey()][] = $kv;
+    }
+
+    protected function handleLeadershipScheduling(&$node, $printProfile)
+    {
+        $company = json_decode(json_encode($node, 512), true);
+        $printArr = json_decode(json_encode($printProfile, 512), true);
+
+        $sessions = $this->resolveDotNotation($company, 'field_ld_session.und');
+        if (count($sessions)) {
+            $years = array_filter(array_map(function ($o) { return (int) taxonomy_term_load($o['tid'])->name; }, $sessions));
+            $terms = [];
+            $termKeys = $this->map['leadership']['term_fields'] ? $this->map['leadership']['term_fields'] : ['categories'];
+            foreach ($termKeys as $key) {
+                $key = sprintf('field_ld_%s.und', $key);
+                $tids = array_filter(array_map(function($o) {
+                    $term = taxonomy_term_load($o['tid']);
+                    if (!$term) return false;
+                    return sprintf('%s_%s', $term->vid, $term->tid);
+                }, $this->resolveDotNotation($printArr, $key, [])));
+                $terms = array_merge($terms, $tids);
+            }
+
+            foreach ($years as $year) {
+                $startDate = strtotime(sprintf('%s-01-01T00:00:00', $year));
+                $endDate = strtotime(sprintf('%s-12-31T23:59:59', $year));
+                foreach ($terms as $term) {
+                    $sectionId = $this->getLeadershipSection($term);
+                    if (!$sectionId) continue;
+                    $legacyId = sprintf('%s_%s', $term, $year);
+                    $this->createScheduleRef($node, $legacyId, $sectionId, $startDate, $endDate);
+                }
+            }
+        }
+    }
+
+    protected function handleLeadershipDataCard(&$node)
+    {
+        $dcid = leadership_get_corresponding_nid($node->nid, 'leadership_data_card', $this->getKey());
+        if (!$dcid) return;
+
+        $dc = node_load($dcid);
+        $dcarr = json_decode(json_encode($dc, 512), true);
+
+        $value = $this->resolveDotNotation($dcarr, 'field_ld_contact.und.0.value');
+        if ($value) $node->ldc['contact']['name'] = $value;
+
+        $value = $this->resolveDotNotation($dcarr, 'field_ld_contact_photo.und.0');
+        if ($value) {
+            $fp = $this->createImage($value);
+            $this->pushImageRef($node, $fp);
+            $node->ldc['contact']['photo'] = $fp;
+        }
+
+        $value = $this->resolveDotNotation($dcarr, 'field_ld_contact_title.und.0.value');
+        if ($value) $node->ldc['contact']['title'] = $value;
+
+        $value = $this->resolveDotNotation($dcarr, 'field_ld_logo.und.0');
+        if ($value) {
+            $fp = $this->createImage($value);
+            $this->pushImageRef($node, $fp);
+            $node->ldc['logo'] = $fp;
+        }
+
+        /**
+         * fucking weird field_collection-item nonsense
+         *
+         * `field_data_field_ld_product_photo` contains multiple references to collection-item
+         * SELECT
+         * 	C.entity_id as nid,
+         *     P.field_ld_product_photos_fid as fid,
+         *     P.field_ld_product_photos_alt as alt,
+         *     P.field_ld_product_photos_title as title
+         *
+         * FROM `field_data_field_ld_product_photo` C
+         *
+         * LEFT JOIN `field_data_field_ld_product_photos` P
+         *     ON P.entity_id = C.field_ld_product_photo_value
+         *     AND P.revision_id = C.field_ld_product_photo_revision_id
+         *
+         * WHERE C.entity_id = 35796
+         * ORDER BY C.delta ASC;
+         *
+         */
+        $values = $this->resolveDotNotation($dcarr, 'field_ld_product_photo.und');
+        if ($values) {
+            foreach ($values as $value) {
+                $fc = field_collection_field_get_entity($value);
+                if (!$fc) continue;
+                $fcArr = json_decode(json_encode($fc, 512), true);
+                $kv = [
+                    'link'  => $this->resolveDotNotation($fcArr, 'field_ld_link.und.0.value'),
+                    'title'  => $this->resolveDotNotation($fcArr, 'field_ld_photo_title.und.0.value'),
+                ];
+                $image = $this->resolveDotNotation($fcArr, 'field_ld_product_photos.und.0');
+                $fp = $this->createImage($image);
+                $kv['image'] = $fp;
+                $this->pushImageRef($node, $fp);
+                $node->ldc['productPhotos'][] = $kv;
+            }
+        }
+
+        $value = $this->resolveDotNotation($dcarr, 'field_ld_teaser.und.0.value');
+        if ($value) $node->ldc['teaser'] = $value;
+
+
+        $this->convertFields($dc);
+        $dcarr = json_decode(json_encode($dc, 512), true);
+
+        $node->lop['name'] = $this->resolveDotNotation($dcarr, 'name');
+        $node->lop['body'] = $this->resolveDotNotation($dcarr, 'body');
+
+        foreach ($dcarr['mutations']['Website']['redirects'] as $redirect) {
+            $node->mutations['Website']['redirects'][] = $redirect;
+        }
+    }
+
+    protected function handleLeadershipOnlineProfile(&$node)
+    {
+        $opid = leadership_get_corresponding_nid($node->nid, 'leadership_online_profile', $this->getKey());
+        if (!$opid) return;
+
+        $op = node_load($opid);
+        $oparr = json_decode(json_encode($op, 512), true);
+
+        $value = $this->resolveDotNotation($oparr, 'field_ld_employees.und.0.value');
+        if ($value) $node->lop['employees'] = $value;
+
+        $value = $this->resolveDotNotation($oparr, 'field_ld_facebook.und.0.value');
+        if ($value) $node->lop['facebook'] = $value;
+
+        $value = $this->resolveDotNotation($oparr, 'field_ld_linkedin.und.0.value');
+        if ($value) $node->lop['linkedin'] = $value;
+
+        $value = $this->resolveDotNotation($oparr, 'field_ld_logo.und.0');
+        if ($value) {
+            $fp = $this->createImage($value);
+            $this->pushImageRef($node, $fp);
+            $node->lop['logo'] = $fp;
+        }
+
+        $value = $this->resolveDotNotation($oparr, 'field_ld_pinterest.und.0.value');
+        if ($value) $node->lop['pinterest'] = $value;
+
+        $value = $this->resolveDotNotation($oparr, 'field_ld_training.und.0.value');
+        if ($value) $node->lop['training'] = $value;
+
+        $value = $this->resolveDotNotation($oparr, 'field_ld_twitter.und.0.value');
+        if ($value) $node->lop['twitter'] = $value;
+
+        $value = $this->resolveDotNotation($oparr, 'field_ld_years.und.0.value');
+        if ($value) $node->lop['years'] = $value;
+
+        $value = $this->resolveDotNotation($oparr, 'field_ld_youtube.und.0.value');
+        if ($value) $node->lop['youtube'] = $value;
+
+        $value = $this->resolveDotNotation($oparr, 'field_youtube_username.und.0.value');
+        if ($value) $node->lop['youtube_username'] = $value;
+
+        $value = $this->resolveDotNotation($oparr, 'field_youtube_video.und.0.value');
+        if ($value) $node->lop['youtube_video'] = $value;
+
+        $value = $this->resolveDotNotation($oparr, 'field_ld_geo_distrib.und.0.value');
+        if ($value) $node->lop['geographic_sales_diistribution'] = $value;
+
+        $value = $this->resolveDotNotation($oparr, 'field_ld_services.und.0.value');
+        if ($value) $node->lop['services'] = $value;
+
+
+        $values = $this->resolveDotNotation($oparr, 'field_ld_sales.und');
+        if ($values) {
+            foreach ($values as $value) {
+                $node->lop['sales_channels'][] = $value['value'];
+            }
+        }
+
+        $this->convertFields($op);
+        $oparr = json_decode(json_encode($op, 512), true);
+
+        $node->lop['name'] = $this->resolveDotNotation($oparr, 'name');
+        $node->lop['body'] = $this->resolveDotNotation($oparr, 'body');
+
+        foreach ($oparr['mutations']['Website']['redirects'] as $redirect) {
+            $node->mutations['Website']['redirects'][] = $redirect;
+        }
+    }
+
+    protected function handleLeadershipPrintProfile(&$node)
+    {
+        $ppid = leadership_get_corresponding_nid($node->nid, 'leadership_print_profile', $this->getKey());
+        if (!$ppid) return;
+
+        $pp = node_load($ppid);
+        $this->handleLeadershipScheduling($node, $pp);
+
+        $pparr = json_decode(json_encode($pp, 512), true);
+
+        $value = $this->resolveDotNotation($pparr, 'field_ld_address_1.und.0.value');
+        if ($value) $node->address1 = $value;
+
+        $value = $this->resolveDotNotation($pparr, 'field_ld_address_2.und.0.value');
+        if ($value) $node->address2 = $value;
+
+        $value = $this->resolveDotNotation($pparr, 'field_ld_address_city.und.0.value');
+        if ($value) $node->city = $value;
+
+        $value = $this->resolveDotNotation($pparr, 'field_ld_state.und.0.value');
+        if ($value) $node->state = $value;
+
+        $value = $this->resolveDotNotation($pparr, 'field_ld_zip_postal_code.und.0.value');
+        if ($value) $node->zip = $value;
+
+        $value = $this->resolveDotNotation($pparr, 'field_ld_country.und.0.value');
+        if ($value) $node->country = $value;
+
+        $value = $this->resolveDotNotation($pparr, 'field_ld_email.und.0.value');
+        if ($value) $node->publicEmail = $value;
+
+        $value = $this->resolveDotNotation($pparr, 'field_ld_fax.und.0.value');
+        if ($value) $node->fax = $value;
+
+        $value = $this->resolveDotNotation($pparr, 'field_ld_phone.und.0.value');
+        if ($value) $node->phone = $value;
+
+        $value = $this->resolveDotNotation($pparr, 'field_ld_website.und.0.value');
+        if ($value) $node->website = $value;
+
+        $value = $this->resolveDotNotation($pparr, 'field_ld_print_logo.und.0');
+        if ($value) {
+            $fp = $this->createImage($value);
+            $this->pushImageRef($node, $fp);
+            $node->lpp['print_logo'] = $fp;
+        }
+
+        $value = $this->resolveDotNotation($pparr, 'field_ld_print_photo_1.und.0');
+        if ($value) {
+            $fp = $this->createImage($value);
+            $this->pushImageRef($node, $fp);
+            $node->lpp['print_photo_1'] = $fp;
+        }
+
+        $value = $this->resolveDotNotation($pparr, 'field_ld_print_photo_2.und.0');
+        if ($value) {
+            $fp = $this->createImage($value);
+            $this->pushImageRef($node, $fp);
+            $node->lpp['print_photo_2'] = $fp;
+        }
+
+        $this->convertFields($pp);
+        $pparr = json_decode(json_encode($pp, 512), true);
+
+        $node->lpp['name'] = $this->resolveDotNotation($pparr, 'name');
+        $node->lpp['body'] = $this->resolveDotNotation($pparr, 'body');
+
+        foreach ($pparr['mutations']['Website']['redirects'] as $redirect) {
+            $node->mutations['Website']['redirects'][] = $redirect;
+        }
+    }
+
+    protected function handleLeadershipData(&$node)
+    {
+        if ($node->type !== 'company' || !function_exists('leadership_get_corresponding_nid')) return;
+
+        $this->handleLeadershipDataCard($node);
+        $this->handleLeadershipOnlineProfile($node);
+        $this->handleLeadershipPrintProfile($node);
     }
 
     /**
