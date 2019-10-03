@@ -231,12 +231,13 @@ abstract class Export extends AbstractExport
      */
     protected function convertTaxonomy(&$node)
     {
+        $language = $node->language ? $node->language : 'und';
         $taxonomy = [];
         $vocabularyFields = $this->getTaxonomyFields();
         foreach ($vocabularyFields AS $vocabularyField) {
             if(!empty($node->$vocabularyField)) {
                 $taxonomies = $node->$vocabularyField;
-                foreach ($taxonomies['und'] AS $tax) {
+                foreach ($taxonomies[$language] AS $tax) {
                     $taxonomy[] = (String) $tax['tid'];
                 }
             }
@@ -412,8 +413,9 @@ abstract class Export extends AbstractExport
         $modifier = function($node) use ($type, $tz) {
             $nid = (int) $node->nid;
             if (0 === $nid) return;
+            $language = $node->language ? $node->language : 'und';
 
-            unset($node->field_image['und'][0]['metatags']);
+            unset($node->field_image[$language][0]['metatags']);
             $nodeArray = json_decode(json_encode($node, 512), true);
 
             $publication = $this->configs[$this->getKey()]['name'];
@@ -440,11 +442,11 @@ abstract class Export extends AbstractExport
 
             if (!empty($node->body)) $set['description'] = $node->body;
             if (is_array($set['description'])) {
-                $set['description'] = $this->resolveDotNotation($nodeArray, 'body.und.0.value');
+                $set['description'] = $this->resolveDotNotation($nodeArray, sprintf('body.%s.0.value', $language));
             }
 
-            $issueDate = $this->resolveDotNotation($nodeArray, 'field_issue_date.und.0.value');
-            $date = $this->resolveDotNotation($nodeArray, 'field_date.und.0.value');
+            $issueDate = $this->resolveDotNotation($nodeArray, sprintf('field_issue_date.%s.0.value', $language));
+            $date = $this->resolveDotNotation($nodeArray, sprintf('field_date.%s.0.value', $language));
             if ($issueDate) {
                 $mailDate = new DateTime(date('c', $issueDate));
             } elseif ($date) {
@@ -472,24 +474,24 @@ abstract class Export extends AbstractExport
                 $set['legacy']['shortName'] = strtolower($mailDate->format('My'));
             }
 
-            $tid = $this->resolveDotNotation($nodeArray, 'field_term_media.und.0.tid');
+            $tid = $this->resolveDotNotation($nodeArray, sprintf('field_term_media.%s.0.tid', $language));
             if ($tid) {
                 $term = taxonomy_term_load($tid);
                 $set['legacy']['refs']['publication'] = ['tid' => $tid, 'vid' => $term->vid, 'name' => $term->name];
             }
 
             // coverImage
-            $image = $this->resolveDotNotation($nodeArray, 'field_image.und.0');
-            if (!$image) $image = $this->resolveDotNotation($nodeArray, 'field_magazine_image.und.0');
-            if (!$image) $image = $this->resolveDotNotation($nodeArray, 'field_digital_cover_image.und.0');
+            $image = $this->resolveDotNotation($nodeArray, sprintf('field_image.%s.0', $language));
+            if (!$image) $image = $this->resolveDotNotation($nodeArray, sprintf('field_magazine_image.%s.0', $language));
+            if (!$image) $image = $this->resolveDotNotation($nodeArray, sprintf('field_digital_cover_image.%s.0', $language));
             if ($image) {
                 $fp = $this->createImage($image);
                 $set['legacy']['refs']['coverImage'][$this->getKey()] = $fp;
             }
 
             // digital edition links
-            $link = $this->resolveDotNotation($nodeArray, 'field_link.und.0.url');
-            if (!$link) $link = $this->resolveDotNotation($nodeArray, 'field_texterity_url.und.0.url');
+            $link = $this->resolveDotNotation($nodeArray, sprintf('field_link.%s.0.url', $language));
+            if (!$link) $link = $this->resolveDotNotation($nodeArray, sprintf('field_texterity_url.%s.0.url', $language));
             if ($link) $set['digitalEditionUrl'] = $link;
 
             return [
@@ -572,6 +574,7 @@ abstract class Export extends AbstractExport
      */
     protected function handleParagraphs(&$node, $paragraphs)
     {
+        $language = $node->language ? $node->language : 'und';
         if ($paragraphs) {
             $items = [];
             $ids = array_map(function($arr) { return $arr['value']; }, $paragraphs);
@@ -581,11 +584,11 @@ abstract class Export extends AbstractExport
                 $itemArray = json_decode(json_encode($item, 512), true);
                 switch ($item->bundle) {
                     case 'embedded_text':
-                        $items[] = $this->resolveDotNotation($itemArray, 'field_embedded_text.und.0.value');
+                        $items[] = $this->resolveDotNotation($itemArray, sprintf('field_embedded_text.%s.0.value', $language));
                         break;
                     case 'embedded_image':
-                        $caption = $this->resolveDotNotation($itemArray, 'field_embedded_image_caption.und.0');
-                        $image = $this->resolveDotNotation($itemArray, 'field_paragraphs_embedded_image.und.0');
+                        $caption = $this->resolveDotNotation($itemArray, sprintf('field_embedded_image_caption.%s.0', $language));
+                        $image = $this->resolveDotNotation($itemArray, sprintf('field_paragraphs_embedded_image.%s.0', $language));
                         if ($image) {
                             $fp = $this->createImage($image);
                             $this->pushImageRef($node, $fp);
@@ -593,9 +596,9 @@ abstract class Export extends AbstractExport
                         }
                         break;
                     case 'headshot_widget':
-                        $author = $this->resolveDotNotation($itemArray, 'field_author.und.0');
-                        $image = $this->resolveDotNotation($itemArray, 'field_image.und.0');
-                        $jobTitle = $this->resolveDotNotation($itemArray, 'field_job_title.und.0');
+                        $author = $this->resolveDotNotation($itemArray, sprintf('field_author.%s.0', $language));
+                        $image = $this->resolveDotNotation($itemArray, sprintf('field_image.%s.0', $language));
+                        $jobTitle = $this->resolveDotNotation($itemArray, sprintf('field_job_title.%s.0', $language));
                         $caption = $jobTitle ? sprintf('%s, %s', $author, $jobTitle) : $author;
                         if ($image) {
                             $fp = $this->createImage($image);
@@ -604,7 +607,7 @@ abstract class Export extends AbstractExport
                         }
                         break;
                     case 'embedded_video':
-                        $embed = $this->resolveDotNotation($itemArray, 'field_embedded_video_code.und.0.value');
+                        $embed = $this->resolveDotNotation($itemArray, sprintf('field_embedded_video_code.%s.0.value', $language));
                         if ($node->type === 'Video') {
                             $node->embedCode = $embed;
                         } else {
@@ -612,11 +615,11 @@ abstract class Export extends AbstractExport
                         }
                         break;
                     case 'embedded_audio':
-                        $code = $this->resolveDotNotation($itemArray, 'field_embedded_audio_code.und.0.value');
+                        $code = $this->resolveDotNotation($itemArray, sprintf('field_embedded_audio_code.%s.0.value', $language));
                         if ($code) $items[] = sprintf('<div class="embedded-audio">%s</div>', $code);
                         break;
                     case 'embedded_twitter_card':
-                        $markup = $this->resolveDotNotation($itemArray, 'field_twitter_card_html_markup.und.0.value');
+                        $markup = $this->resolveDotNotation($itemArray, sprintf('field_twitter_card_html_markup.%s.0.value', $language));
                         if (preg_match_all('/href="(.+?)"/i', $markup, $matches) > 0) {
                             $url = array_pop($matches[1]);
                             $items[] = sprintf('%%{[ data-embed-type="oembed" data-embed-id="%s" data-embed-element="aside" ]}%%', $url);
@@ -625,7 +628,7 @@ abstract class Export extends AbstractExport
                         }
                         break;
                     case 'embedded_instagram_card':
-                        $markup = $this->resolveDotNotation($itemArray, 'field_instagram_card_html_markup.und.0.value');
+                        $markup = $this->resolveDotNotation($itemArray, sprintf('field_instagram_card_html_markup.%s.0.value', $language));
                         if (preg_match_all('/src="(.+?)"/i', $markup, $matches) > 0) {
                             $url = array_pop($matches[1]);
                             $items[] = sprintf('%%{[ data-embed-type="oembed" data-embed-id="%s" data-embed-element="aside" ]}%%', $url);
@@ -634,8 +637,8 @@ abstract class Export extends AbstractExport
                         }
                         break;
                     case 'sidebar':
-                        $caption = $this->resolveDotNotation($itemArray, 'field_embedded_text.und.0');
-                        $image = $this->resolveDotNotation($itemArray, 'field_image.und.0');
+                        $caption = $this->resolveDotNotation($itemArray, sprintf('field_embedded_text.%s.0', $language));
+                        $image = $this->resolveDotNotation($itemArray, sprintf('field_image.%s.0', $language));
                         if ($image) {
                             $fp = $this->createImage($image);
                             $this->pushImageRef($node, $fp);
@@ -645,17 +648,17 @@ abstract class Export extends AbstractExport
                         }
                         break;
                     case 'embedded_storify_widget':
-                        $markup = $this->resolveDotNotation($itemArray, 'field_embed_code.und.0.value');
+                        $markup = $this->resolveDotNotation($itemArray, sprintf('field_embed_code.%s.0.value', $language));
                         $items[] = $markup;
                         break;
                     case 'embedded_photo_gallery':
-                        $gallery = $this->resolveDotNotation($itemArray, 'field_embedded_gallery.und');
+                        $gallery = $this->resolveDotNotation($itemArray, sprintf('field_embedded_gallery.%s', $language));
                         if (!$gallery) break;
                         foreach ($gallery as $image) {
                             if (!$image) continue;
-                            $caption = $this->resolveDotNotation($image, 'field_file_image_caption_text.und.0.value');
-                            $alt = $this->resolveDotNotation($image, 'field_file_image_alt_text.und.0.value');
-                            $title = $this->resolveDotNotation($image, 'field_file_image_title_text.und.0.value');
+                            $caption = $this->resolveDotNotation($image, 'field_file_image_caption_text.%s.0.value');
+                            $alt = $this->resolveDotNotation($image, 'field_file_image_alt_text.%s.0.value');
+                            $title = $this->resolveDotNotation($image, 'field_file_image_title_text.%s.0.value');
                             $title = $image['title'] ? $image['title'] : $title;
                             $fp = $this->createImage($image);
                             $this->pushImageRef($node, $fp);
@@ -663,8 +666,8 @@ abstract class Export extends AbstractExport
                         }
                         break;
                     case 'downloadable_file':
-                        $file = $this->resolveDotNotation($itemArray, 'field_downloadable_file.und.0');
-                        $description = $this->resolveDotNotation($itemArray, 'field_file_description.und.0');
+                        $file = $this->resolveDotNotation($itemArray, sprintf('field_downloadable_file.%s.0', $language));
+                        $description = $this->resolveDotNotation($itemArray, sprintf('field_file_description.%s.0', $language));
                         if ($file) {
                             $fp = $this->createAsset($file, $description);
                             $node->legacy['refs']['assets'][$this->getKey()][] = $fp;
@@ -704,14 +707,16 @@ abstract class Export extends AbstractExport
     {
         $company = json_decode(json_encode($node, 512), true);
         $printArr = json_decode(json_encode($printProfile, 512), true);
+        $language = $node->language ? $node->language : 'und';
 
-        $sessions = $this->resolveDotNotation($company, 'field_ld_session.und');
+        $sessions = $this->resolveDotNotation($company, sprintf('field_ld_session.%s', $language));
         if (count($sessions)) {
             $years = array_filter(array_map(function ($o) { return (int) taxonomy_term_load($o['tid'])->name; }, $sessions));
             $terms = [];
             $termKeys = $this->map['leadership']['term_fields'] ? $this->map['leadership']['term_fields'] : ['categories'];
+            $language = $printProfile->language ? $printProfile->language : 'und';
             foreach ($termKeys as $key) {
-                $key = sprintf('field_ld_%s.und', $key);
+                $key = sprintf('field_ld_%s.%s', $key, $language);
                 $tids = array_filter(array_map(function($o) {
                     $term = taxonomy_term_load($o['tid']);
                     if (!$term) return false;
@@ -740,21 +745,22 @@ abstract class Export extends AbstractExport
 
         $dc = node_load($dcid);
         $dcarr = json_decode(json_encode($dc, 512), true);
+        $language = $dc->language ? $dc->language : 'und';
 
-        $value = $this->resolveDotNotation($dcarr, 'field_ld_contact.und.0.value');
+        $value = $this->resolveDotNotation($dcarr, sprintf('field_ld_contact.%s.0.value', $language));
         if ($value) $node->ldc['contact']['name'] = $value;
 
-        $value = $this->resolveDotNotation($dcarr, 'field_ld_contact_photo.und.0');
+        $value = $this->resolveDotNotation($dcarr, sprintf('field_ld_contact_photo.%s.0', $language));
         if ($value) {
             $fp = $this->createImage($value);
             $this->pushImageRef($node, $fp);
             $node->ldc['contact']['photo'] = $fp;
         }
 
-        $value = $this->resolveDotNotation($dcarr, 'field_ld_contact_title.und.0.value');
+        $value = $this->resolveDotNotation($dcarr, sprintf('field_ld_contact_title.%s.0.value', $language));
         if ($value) $node->ldc['contact']['title'] = $value;
 
-        $value = $this->resolveDotNotation($dcarr, 'field_ld_logo.und.0');
+        $value = $this->resolveDotNotation($dcarr, sprintf('field_ld_logo.%s.0', $language));
         if ($value) {
             $fp = $this->createImage($value);
             $this->pushImageRef($node, $fp);
@@ -781,17 +787,17 @@ abstract class Export extends AbstractExport
          * ORDER BY C.delta ASC;
          *
          */
-        $values = $this->resolveDotNotation($dcarr, 'field_ld_product_photo.und');
+        $values = $this->resolveDotNotation($dcarr, sprintf('field_ld_product_photo.%s', $language));
         if ($values) {
             foreach ($values as $value) {
                 $fc = field_collection_field_get_entity($value);
                 if (!$fc) continue;
                 $fcArr = json_decode(json_encode($fc, 512), true);
                 $kv = [
-                    'link'  => $this->resolveDotNotation($fcArr, 'field_ld_link.und.0.value'),
-                    'title'  => $this->resolveDotNotation($fcArr, 'field_ld_photo_title.und.0.value'),
+                    'link'  => $this->resolveDotNotation($fcArr, sprintf('field_ld_link.%s.0.value', $language)),
+                    'title'  => $this->resolveDotNotation($fcArr, sprintf('field_ld_photo_title.%s.0.value', $language)),
                 ];
-                $image = $this->resolveDotNotation($fcArr, 'field_ld_product_photos.und.0');
+                $image = $this->resolveDotNotation($fcArr, sprintf('field_ld_product_photos.%s.0', $language));
                 $fp = $this->createImage($image);
                 $kv['image'] = $fp;
                 $this->pushImageRef($node, $fp);
@@ -799,7 +805,7 @@ abstract class Export extends AbstractExport
             }
         }
 
-        $value = $this->resolveDotNotation($dcarr, 'field_ld_teaser.und.0.value');
+        $value = $this->resolveDotNotation($dcarr, sprintf('field_ld_teaser.%s.0.value', $language));
         if ($value) $node->ldc['teaser'] = $value;
 
 
@@ -821,52 +827,53 @@ abstract class Export extends AbstractExport
 
         $op = node_load($opid);
         $oparr = json_decode(json_encode($op, 512), true);
+        $language = $op->language ? $op->language : 'und';
 
-        $value = $this->resolveDotNotation($oparr, 'field_ld_employees.und.0.value');
+        $value = $this->resolveDotNotation($oparr, sprintf('field_ld_employees.%s.0.value', $language));
         if ($value) $node->lop['employees'] = $value;
 
-        $value = $this->resolveDotNotation($oparr, 'field_ld_facebook.und.0.value');
+        $value = $this->resolveDotNotation($oparr, sprintf('field_ld_facebook.%s.0.value', $language));
         if ($value) $node->lop['facebook'] = $value;
 
-        $value = $this->resolveDotNotation($oparr, 'field_ld_linkedin.und.0.value');
+        $value = $this->resolveDotNotation($oparr, sprintf('field_ld_linkedin.%s.0.value', $language));
         if ($value) $node->lop['linkedin'] = $value;
 
-        $value = $this->resolveDotNotation($oparr, 'field_ld_logo.und.0');
+        $value = $this->resolveDotNotation($oparr, sprintf('field_ld_logo.%s.0', $language));
         if ($value) {
             $fp = $this->createImage($value);
             $this->pushImageRef($node, $fp);
             $node->lop['logo'] = $fp;
         }
 
-        $value = $this->resolveDotNotation($oparr, 'field_ld_pinterest.und.0.value');
+        $value = $this->resolveDotNotation($oparr, sprintf('field_ld_pinterest.%s.0.value', $language));
         if ($value) $node->lop['pinterest'] = $value;
 
-        $value = $this->resolveDotNotation($oparr, 'field_ld_training.und.0.value');
+        $value = $this->resolveDotNotation($oparr, sprintf('field_ld_training.%s.0.value', $language));
         if ($value) $node->lop['training'] = $value;
 
-        $value = $this->resolveDotNotation($oparr, 'field_ld_twitter.und.0.value');
+        $value = $this->resolveDotNotation($oparr, sprintf('field_ld_twitter.%s.0.value', $language));
         if ($value) $node->lop['twitter'] = $value;
 
-        $value = $this->resolveDotNotation($oparr, 'field_ld_years.und.0.value');
+        $value = $this->resolveDotNotation($oparr, sprintf('field_ld_years.%s.0.value', $language));
         if ($value) $node->lop['years'] = $value;
 
-        $value = $this->resolveDotNotation($oparr, 'field_ld_youtube.und.0.value');
+        $value = $this->resolveDotNotation($oparr, sprintf('field_ld_youtube.%s.0.value', $language));
         if ($value) $node->lop['youtube'] = $value;
 
-        $value = $this->resolveDotNotation($oparr, 'field_youtube_username.und.0.value');
+        $value = $this->resolveDotNotation($oparr, sprintf('field_youtube_username.%s.0.value', $language));
         if ($value) $node->lop['youtube_username'] = $value;
 
-        $value = $this->resolveDotNotation($oparr, 'field_youtube_video.und.0.value');
+        $value = $this->resolveDotNotation($oparr, sprintf('field_youtube_video.%s.0.value', $language));
         if ($value) $node->lop['youtube_video'] = $value;
 
-        $value = $this->resolveDotNotation($oparr, 'field_ld_geo_distrib.und.0.value');
+        $value = $this->resolveDotNotation($oparr, sprintf('field_ld_geo_distrib.%s.0.value', $language));
         if ($value) $node->lop['geographic_sales_diistribution'] = $value;
 
-        $value = $this->resolveDotNotation($oparr, 'field_ld_services.und.0.value');
+        $value = $this->resolveDotNotation($oparr, sprintf('field_ld_services.%s.0.value', $language));
         if ($value) $node->lop['services'] = $value;
 
 
-        $values = $this->resolveDotNotation($oparr, 'field_ld_sales.und');
+        $values = $this->resolveDotNotation($oparr, sprintf('field_ld_sales.%s', $language));
         if ($values) {
             foreach ($values as $value) {
                 $node->lop['sales_channels'][] = $value['value'];
@@ -893,52 +900,53 @@ abstract class Export extends AbstractExport
         $this->handleLeadershipScheduling($node, $pp);
 
         $pparr = json_decode(json_encode($pp, 512), true);
+        $language = $pp->language ? $pp->language : 'und';
 
-        $value = $this->resolveDotNotation($pparr, 'field_ld_address_1.und.0.value');
+        $value = $this->resolveDotNotation($pparr, sprintf('field_ld_address_1.%s.0.value', $language));
         if ($value) $node->address1 = $value;
 
-        $value = $this->resolveDotNotation($pparr, 'field_ld_address_2.und.0.value');
+        $value = $this->resolveDotNotation($pparr, sprintf('field_ld_address_2.%s.0.value', $language));
         if ($value) $node->address2 = $value;
 
-        $value = $this->resolveDotNotation($pparr, 'field_ld_address_city.und.0.value');
+        $value = $this->resolveDotNotation($pparr, sprintf('field_ld_address_city.%s.0.value', $language));
         if ($value) $node->city = $value;
 
-        $value = $this->resolveDotNotation($pparr, 'field_ld_state.und.0.value');
+        $value = $this->resolveDotNotation($pparr, sprintf('field_ld_state.%s.0.value', $language));
         if ($value) $node->state = $value;
 
-        $value = $this->resolveDotNotation($pparr, 'field_ld_zip_postal_code.und.0.value');
+        $value = $this->resolveDotNotation($pparr, sprintf('field_ld_zip_postal_code.%s.0.value', $language));
         if ($value) $node->zip = $value;
 
-        $value = $this->resolveDotNotation($pparr, 'field_ld_country.und.0.value');
+        $value = $this->resolveDotNotation($pparr, sprintf('field_ld_country.%s.0.value', $language));
         if ($value) $node->country = $value;
 
-        $value = $this->resolveDotNotation($pparr, 'field_ld_email.und.0.value');
+        $value = $this->resolveDotNotation($pparr, sprintf('field_ld_email.%s.0.value', $language));
         if ($value) $node->publicEmail = $value;
 
-        $value = $this->resolveDotNotation($pparr, 'field_ld_fax.und.0.value');
+        $value = $this->resolveDotNotation($pparr, sprintf('field_ld_fax.%s.0.value', $language));
         if ($value) $node->fax = $value;
 
-        $value = $this->resolveDotNotation($pparr, 'field_ld_phone.und.0.value');
+        $value = $this->resolveDotNotation($pparr, sprintf('field_ld_phone.%s.0.value', $language));
         if ($value) $node->phone = $value;
 
-        $value = $this->resolveDotNotation($pparr, 'field_ld_website.und.0.value');
+        $value = $this->resolveDotNotation($pparr, sprintf('field_ld_website.%s.0.value', $language));
         if ($value) $node->website = $value;
 
-        $value = $this->resolveDotNotation($pparr, 'field_ld_print_logo.und.0');
+        $value = $this->resolveDotNotation($pparr, sprintf('field_ld_print_logo.%s.0', $language));
         if ($value) {
             $fp = $this->createImage($value);
             $this->pushImageRef($node, $fp);
             $node->lpp['print_logo'] = $fp;
         }
 
-        $value = $this->resolveDotNotation($pparr, 'field_ld_print_photo_1.und.0');
+        $value = $this->resolveDotNotation($pparr, sprintf('field_ld_print_photo_1.%s.0', $language));
         if ($value) {
             $fp = $this->createImage($value);
             $this->pushImageRef($node, $fp);
             $node->lpp['print_photo_1'] = $fp;
         }
 
-        $value = $this->resolveDotNotation($pparr, 'field_ld_print_photo_2.und.0');
+        $value = $this->resolveDotNotation($pparr, sprintf('field_ld_print_photo_2.%s.0', $language));
         if ($value) {
             $fp = $this->createImage($value);
             $this->pushImageRef($node, $fp);
@@ -974,12 +982,13 @@ abstract class Export extends AbstractExport
     {
         $this->handleLeadershipData($node);
         $nodeArray = json_decode(json_encode($node, 512), true);
+        $language = $node->language ? $node->language : 'und';
 
         // type
         $node->type = str_replace('Website\\Content\\', '', $this->map['Content'][$node->type]);
-        $tid = $this->resolveDotNotation($nodeArray, 'field_term_subtype.und.0.tid');
-        if (!$tid) $tid = $this->resolveDotNotation($nodeArray, 'field_content_item_type.und.0.tid');
-        if (!$tid) $tid = $this->resolveDotNotation($nodeArray, 'field_lead_gen_item_type.und.0.tid');
+        $tid = $this->resolveDotNotation($nodeArray, sprintf('field_term_subtype.%s.0.tid', $language));
+        if (!$tid) $tid = $this->resolveDotNotation($nodeArray, sprintf('field_content_item_type.%s.0.tid', $language));
+        if (!$tid) $tid = $this->resolveDotNotation($nodeArray, sprintf('field_lead_gen_item_type.%s.0.tid', $language));
         if ($tid) {
             if (!isset($this->term_cache[$tid])) {
                 $type = taxonomy_term_load($tid);
@@ -1019,7 +1028,7 @@ abstract class Export extends AbstractExport
         $node->updated = (int) $node->changed;
         $node->published = (int) $node->created;
 
-        $unpublished = $this->resolveDotNotation($nodeArray, 'field_expiration_date.und.value');
+        $unpublished = $this->resolveDotNotation($nodeArray, sprintf('field_expiration_date.%s.value', $language));
         if ($unpublished) $node->unpublished = (int) $unpublished;
         unset($node->field_expiration_date);
 
@@ -1040,29 +1049,29 @@ abstract class Export extends AbstractExport
         foreach (db_query($q) as $r) $redirects[] = $r->source;
 
         // body
-        $body = $this->resolveDotNotation($nodeArray, 'body.und.0.value');
+        $body = $this->resolveDotNotation($nodeArray, sprintf('body.%s.0.value', $language));
         $node->body = $body;
         if (empty($body)) {
             unset($node->body);
         }
 
-        $paragraphs = $this->resolveDotNotation($nodeArray, 'field_body_paragraphs.und');
+        $paragraphs = $this->resolveDotNotation($nodeArray, sprintf('field_body_paragraphs.%s', $language));
         $this->handleParagraphs($node, $paragraphs);
 
         // teaser
-        $teaser = $this->resolveDotNotation($nodeArray, 'field_deckhead.und.0.value');
+        $teaser = $this->resolveDotNotation($nodeArray, sprintf('field_deckhead.%s.0.value', $language));
         if (!empty($teaser)) $node->teaser = $teaser;
         unset($node->field_deckhead);
 
-        $teaser = $this->resolveDotNotation($nodeArray, 'field_summary.und.0.value');
+        $teaser = $this->resolveDotNotation($nodeArray, sprintf('field_summary.%s.0.value', $language));
         if (!empty($teaser)) $node->teaser = $teaser;
         unset($node->field_summary);
 
-        $author = $this->resolveDotNotation($nodeArray, 'field_byline.und.0.value');
+        $author = $this->resolveDotNotation($nodeArray, sprintf('field_byline.%s.0.value', $language));
         if (!$author) $author = $this->resolveDotNotation($nodeArray, 'name');
         if ($author) {
             list($first, $last) = explode(' ', $author, 2);
-            $title = $this->resolveDotNotation($nodeArray, 'field_author_title.und.0.value');
+            $title = $this->resolveDotNotation($nodeArray, sprintf('field_author_title.%s.0.value', $language));
             $this->importContact([
                 'firstName' => $first,
                 'lastName' => $last,
@@ -1072,7 +1081,7 @@ abstract class Export extends AbstractExport
         }
 
 
-        $companies = $this->resolveDotNotation($nodeArray, 'field_companies.und');
+        $companies = $this->resolveDotNotation($nodeArray, sprintf('field_companies.%s', $language));
         if (!empty($companies)) {
             foreach ($companies as $ref) {
                 $node->legacy['refs']['companies'][$this->getKey()][] = $ref['nid'];
@@ -1084,7 +1093,7 @@ abstract class Export extends AbstractExport
         $taxFields = ['coverage', 'source_type', 'coverage_type', 'column_type', 'subtype', 'company_type'];
         // @todo check field_term_vocab, field_term_vocab_primary_industry, field_allterms
         foreach ($taxFields as $type) {
-            $refs = $this->resolveDotNotation($nodeArray, sprintf('field_term_%s.und', $type));
+            $refs = $this->resolveDotNotation($nodeArray, sprintf('field_term_%s.%s', $type, $language));
             if ($refs) {
                 foreach ($refs as $ref) {
                     $term = taxonomy_term_load($ref['tid']);
@@ -1100,7 +1109,7 @@ abstract class Export extends AbstractExport
             unset($node->{sprintf('field_term_%s', $type)});
         }
 
-        $allTerms = $this->resolveDotNotation($nodeArray, 'field_allterms.und');
+        $allTerms = $this->resolveDotNotation($nodeArray, sprintf('field_allterms.%s', $language));
         if (!empty($allTerms)) {
             foreach ($allTerms as $ref) {
                 $term = taxonomy_term_load($ref['tid']);
@@ -1116,7 +1125,7 @@ abstract class Export extends AbstractExport
         unset($node->field_allterms);
 
         // Related To
-        $relatedTo = $this->resolveDotNotation($nodeArray, 'field_related.und');
+        $relatedTo = $this->resolveDotNotation($nodeArray, sprintf('field_related.%s', $language));
         if (!empty($relatedTo)) {
             foreach ($relatedTo as $ref) {
                 $node->legacy['refs']['relatedTo'][$this->getKey()][] = $ref['nid'];
@@ -1125,67 +1134,67 @@ abstract class Export extends AbstractExport
         unset($node->field_related);
 
         // Address data
-        $address1 = $this->resolveDotNotation($nodeArray, 'field_address1.und.value');
+        $address1 = $this->resolveDotNotation($nodeArray, sprintf('field_address1.%s.value', $language));
         if ($address1) $node->address1 = $address1;
         unset($node->field_address1);
 
-        $address1 = $this->resolveDotNotation($nodeArray, 'field_street.und.0.value');
+        $address1 = $this->resolveDotNotation($nodeArray, sprintf('field_street.%s.0.value', $language));
         if ($address1) $node->address1 = $address1;
         unset($node->field_street);
 
-        $address2 = $this->resolveDotNotation($nodeArray, 'field_address2.und.value');
+        $address2 = $this->resolveDotNotation($nodeArray, sprintf('field_address2.%s.value', $language));
         if ($address2) $node->address1 = $address2;
         unset($node->field_address2);
 
-        $address2 = $this->resolveDotNotation($nodeArray, 'field_addr2.und.value');
+        $address2 = $this->resolveDotNotation($nodeArray, sprintf('field_addr2.%s.value', $language));
         if ($address2) $node->address1 = $address2;
         unset($node->field_addr2);
 
-        $city = $this->resolveDotNotation($nodeArray, 'field_city.und.value');
+        $city = $this->resolveDotNotation($nodeArray, sprintf('field_city.%s.value', $language));
         if ($city) $node->city = $city;
         unset($node->field_city);
 
-        $country = $this->resolveDotNotation($nodeArray, 'field_country.und.value');
+        $country = $this->resolveDotNotation($nodeArray, sprintf('field_country.%s.value', $language));
         if ($country) $node->country = $country;
-        $country = $this->resolveDotNotation($nodeArray, 'field_country.und.0.value');
+        $country = $this->resolveDotNotation($nodeArray, sprintf('field_country.%s.0.value', $language));
         if ($country) $node->country = $country;
         unset($node->field_country);
 
-        $zip = $this->resolveDotNotation($nodeArray, 'field_zipcode.und.value');
+        $zip = $this->resolveDotNotation($nodeArray, sprintf('field_zipcode.%s.value', $language));
         if ($zip) $node->zip = $zip;
         unset($node->field_zipcode);
 
-        $zip = $this->resolveDotNotation($nodeArray, 'field_zip.und.0.value');
+        $zip = $this->resolveDotNotation($nodeArray, sprintf('field_zip.%s.0.value', $language));
         if ($zip) $node->zip = $zip;
         unset($node->field_zip);
 
-        $state = $this->resolveDotNotation($nodeArray, 'field_state.und.value');
+        $state = $this->resolveDotNotation($nodeArray, sprintf('field_state.%s.value', $language));
         if ($state) $node->state = $state;
-        $state = $this->resolveDotNotation($nodeArray, 'field_state.und.0.value');
+        $state = $this->resolveDotNotation($nodeArray, sprintf('field_state.%s.0.value', $language));
         if ($state) $node->state = $state;
         unset($node->field_state);
 
-        $fax = $this->resolveDotNotation($nodeArray, 'field_fax.und.value');
+        $fax = $this->resolveDotNotation($nodeArray, sprintf('field_fax.%s.value', $language));
         if ($fax) $node->fax = $fax;
         unset($node->field_fax);
 
-        $phone = $this->resolveDotNotation($nodeArray, 'field_phone.und.value');
+        $phone = $this->resolveDotNotation($nodeArray, sprintf('field_phone.%s.value', $language));
         if ($phone) $node->phone = $phone;
         unset($node->field_phone);
 
-        $phone = $this->resolveDotNotation($nodeArray, 'field_company_phone.und.0.value');
+        $phone = $this->resolveDotNotation($nodeArray, sprintf('field_company_phone.%s.0.value', $language));
         if ($phone) $node->phone = $phone;
         unset($node->field_company_phone);
 
         // Sidebars
-        $blockquote = $this->resolveDotNotation($nodeArray, 'field_blockquote.und.value');
+        $blockquote = $this->resolveDotNotation($nodeArray, sprintf('field_blockquote.%s.value', $language));
         if ($blockquote) {
             $node->sidebars[] = $blockquote;
         }
         unset($node->field_blockquote);
 
         // Podcasts
-        $podcast = $this->resolveDotNotation($nodeArray, 'field_podcast.und');
+        $podcast = $this->resolveDotNotation($nodeArray, sprintf('field_podcast.%s', $language));
         if ($podcast) {
             $podcast['_uri'] = file_create_url($podcast['uri']);
             $node->legacy['refs']['files'][] = $podcast;
@@ -1198,8 +1207,8 @@ abstract class Export extends AbstractExport
 
 
         // News
-        // field_link.und.{title,url} link to news source -- embed in content body?
-        $company = $this->resolveDotNotation($nodeArray, 'field_wir_sponsor.und.target_id');
+        // field_link.%s.{title,url} link to news source -- embed in content body?
+        $company = $this->resolveDotNotation($nodeArray, sprintf('field_wir_sponsor.%s.target_id', $language));
         if ($company) {
             $node->legacy['refs']['company'] = (int) $company;
         }
@@ -1207,7 +1216,7 @@ abstract class Export extends AbstractExport
 
         // Videos
         // field_white_paper // Exist on Videos, contain youtube links??
-        $viddler = $this->resolveDotNotation($nodeArray, 'field_viddler_id.und.0');
+        $viddler = $this->resolveDotNotation($nodeArray, sprintf('field_viddler_id.%s.0', $language));
         if ($viddler) $node->embedCode = $viddler['embed_code'];
 
         // Whitepapers
@@ -1215,7 +1224,7 @@ abstract class Export extends AbstractExport
         // Document
         // field_top_copy
         // field_eyebrow
-        $files = $this->resolveDotNotation($nodeArray, 'field_download_document.und');
+        $files = $this->resolveDotNotation($nodeArray, sprintf('field_download_document.%s', $language));
         if (!empty($files)) {
             foreach ($files as $file) {
                 $file['_uri'] = file_create_url($file['uri']);
@@ -1224,7 +1233,7 @@ abstract class Export extends AbstractExport
         }
         unset($node->field_download_document);
 
-        $files = $this->resolveDotNotation($nodeArray, 'field_content_pdf.und');
+        $files = $this->resolveDotNotation($nodeArray, sprintf('field_content_pdf.%s', $language));
         if (!empty($files)) {
             foreach ($files as $file) {
                 $file['_uri'] = file_create_url($file['uri']);
@@ -1244,7 +1253,7 @@ abstract class Export extends AbstractExport
         //  field_sub_title, field_playbook_name, field_playbook_pdf, field_disclaimer
 
         // Companies
-        $youtube = $this->resolveDotNotation($nodeArray, 'field_youtube_username.und.value');
+        $youtube = $this->resolveDotNotation($nodeArray, sprintf('field_youtube_username.%s.value', $language));
         if ($youtube) $node->socialLinks[] = [
             'provider'  => 'youtube',
             'label'     => 'Youtube',
@@ -1252,23 +1261,23 @@ abstract class Export extends AbstractExport
         ];
         unset($node->field_youtube_username);
 
-        $logo = $this->resolveDotNotation($nodeArray, 'field_logo.und');
+        $logo = $this->resolveDotNotation($nodeArray, sprintf('field_logo.%s', $language));
         if ($logo) {
             $fp = $this->createImage($logo);
             $node->legacy['refs']['logo'][] = $fp;
         }
         unset($node->field_logo);
 
-        $link = $this->resolveDotNotation($nodeArray, 'field_link.und.url');
+        $link = $this->resolveDotNotation($nodeArray, sprintf('field_link.%s.url', $language));
         if ($link) $node->website = $link;
         unset($node->field_link);
 
-        $link = $this->resolveDotNotation($nodeArray, 'field_website.und.0.url');
+        $link = $this->resolveDotNotation($nodeArray, sprintf('field_website.%s.0.url', $language));
         if ($link) $node->website = $link;
         unset($node->field_website);
 
         // Leadership Session
-        $tid = $this->resolveDotNotation($nodeArray, 'field_ld_session.und.tid');
+        $tid = $this->resolveDotNotation($nodeArray, sprintf('field_ld_session.%s.tid', $language));
         if ($tid) {
             $term = taxonomy_term_load($tid);
             $id = sprintf('%s_%s', $term->vid, $tid);
@@ -1281,10 +1290,10 @@ abstract class Export extends AbstractExport
         }
         unset($node->field_ld_session);
 
-        $date = $this->resolveDotNotation($nodeArray, 'field_event_date.und.0.value');
+        $date = $this->resolveDotNotation($nodeArray, sprintf('field_event_date.%s.0.value', $language));
         if ($date) {
             $node->startDate = date('c', strtotime($date));
-            $end = $this->resolveDotNotation($nodeArray, 'field_event_date.und.0.value2');
+            $end = $this->resolveDotNotation($nodeArray, sprintf('field_event_date.%s.0.value2', $language));
             if ($end) {
                 $node->endDate = date('c', strtotime($end));
             } else {
@@ -1293,10 +1302,10 @@ abstract class Export extends AbstractExport
         }
         unset($node->field_event_date);
 
-        $date = $this->resolveDotNotation($nodeArray, 'field_date.und.0.value');
+        $date = $this->resolveDotNotation($nodeArray, sprintf('field_date.%s.0.value', $language));
         if ($date) {
             $node->startDate = date('c', strtotime($date));
-            $end = $this->resolveDotNotation($nodeArray, 'field_date.und.0.value2');
+            $end = $this->resolveDotNotation($nodeArray, sprintf('field_date.%s.0.value2', $language));
             if ($end) {
                 $node->endDate = date('c', strtotime($end));
             } else {
@@ -1305,7 +1314,7 @@ abstract class Export extends AbstractExport
         }
         unset($node->field_date);
 
-        $byline = $this->resolveDotNotation($nodeArray, 'field_contributed_author.und.0.value');
+        $byline = $this->resolveDotNotation($nodeArray, sprintf('field_contributed_author.%s.0.value', $language));
         if ($byline) $node->byline = $byline;
         unset($node->field_contributed_author);
 
@@ -1314,24 +1323,24 @@ abstract class Export extends AbstractExport
             if ($node->_id === 20611) $node->type = 'Article';
         }
 
-        $linkUrl = $this->resolveDotNotation($nodeArray, 'field_texterity_url.und.0.url');
+        $linkUrl = $this->resolveDotNotation($nodeArray, sprintf('field_texterity_url.%s.0.url', $language));
         if ($linkUrl) $node->linkUrl = $linkUrl;
         unset($node->field_texterity_url);
 
-        $email = $this->resolveDotNotation($nodeArray, 'field_email_address.und.0.email');
+        $email = $this->resolveDotNotation($nodeArray, sprintf('field_email_address.%s.0.email', $language));
         if ($email) $node->publicEmail = $email;
         if ($email) $node->email = $email;
         unset($node->field_email_address);
 
-        $jobTitle = $this->resolveDotNotation($nodeArray, 'field_job_title.und.0.value');
+        $jobTitle = $this->resolveDotNotation($nodeArray, sprintf('field_job_title.%s.0.value', $language));
         if ($jobTitle) $node->title = $jobTitle;
         unset($node->field_job_title);
 
-        $phone = $this->resolveDotNotation($nodeArray, 'field_phone_number.und.0.value');
+        $phone = $this->resolveDotNotation($nodeArray, sprintf('field_phone_number.%s.0.value', $language));
         if ($phone) $node->phone = $phone;
         unset($node->field_phone_number);
 
-        $twitter = $this->resolveDotNotation($nodeArray, 'field_twitter_handle.und.0.value');
+        $twitter = $this->resolveDotNotation($nodeArray, sprintf('field_twitter_handle.%s.0.value', $language));
         if ($twitter) $node->socialLinks[] = [
             'provider'  => 'twitter',
             'label'     => 'Twitter',
@@ -1345,77 +1354,77 @@ abstract class Export extends AbstractExport
             $node->lastName = $lastName;
         }
 
-        $company = $this->resolveDotNotation($nodeArray, 'field_company_profile_reference.und.0.nid');
+        $company = $this->resolveDotNotation($nodeArray, sprintf('field_company_profile_reference.%s.0.nid', $language));
         if ($company) $node->legacy['refs']['company'][$this->getKey()] = $company;
         unset($node->field_company_profile_reference);
 
-        $cta = $this->resolveDotNotation($nodeArray, 'field_call_to_action_link.und.0');
+        $cta = $this->resolveDotNotation($nodeArray, sprintf('field_call_to_action_link.%s.0', $language));
         if ($cta) {
             $node->linkText = $cta['title'];
             $node->linkUrl = $cta['url'];
         }
         unset($node->field_call_to_action_link);
 
-        $body = $this->resolveDotNotation($nodeArray, 'field_copy_text.und.0.value');
+        $body = $this->resolveDotNotation($nodeArray, sprintf('field_copy_text.%s.0.value', $language));
         if ($body) $node->body = $body;
         unset($node->field_copy_text);
 
-        $teaser = $this->resolveDotNotation($nodeArray, 'field_headline_text.und.0.value');
+        $teaser = $this->resolveDotNotation($nodeArray, sprintf('field_headline_text.%s.0.value', $language));
         if ($teaser) $node->teaser = $teaser;
         unset($node->field_headline_text);
 
-        $status = $this->resolveDotNotation($nodeArray, 'field_ad_status.und.0.value');
+        $status = $this->resolveDotNotation($nodeArray, sprintf('field_ad_status.%s.0.value', $language));
         if ($status !== null) $node->status = (int) $status;
 
-        $date = $this->resolveDotNotation($nodeArray, 'field_ad_dates.und.0.value');
+        $date = $this->resolveDotNotation($nodeArray, sprintf('field_ad_dates.%s.0.value', $language));
         if ($date) {
             $node->published = date('c', strtotime($date));
-            $end = $this->resolveDotNotation($nodeArray, 'field_ad_dates.und.0.value2');
+            $end = $this->resolveDotNotation($nodeArray, sprintf('field_ad_dates.%s.0.value2', $language));
             if ($end) {
                 $node->unpublished = date('c', strtotime($end));
             }
         }
         unset($node->field_ad_dates);
 
-        $whitepaper = $this->resolveDotNotation($nodeArray, 'field_whitepaper.und.0.nid');
+        $whitepaper = $this->resolveDotNotation($nodeArray, sprintf('field_whitepaper.%s.0.nid', $language));
         if ($whitepaper) $node->legacy['refs']['relatedTo'][$this->getKey()][] = $whitepaper;
         unset($node->field_whitepaper);
 
-        $url = $this->resolveDotNotation($nodeArray, 'field_brightcove_url.und.0.url');
+        $url = $this->resolveDotNotation($nodeArray, sprintf('field_brightcove_url.%s.0.url', $language));
         if ($url) $node->embedCode = sprintf('<iframe src="%s"></iframe>', $url);
         unset($node->field_brightcove_url);
 
-        $file = $this->resolveDotNotation($nodeArray, 'field_product_data_sheet.und.0');
+        $file = $this->resolveDotNotation($nodeArray, sprintf('field_product_data_sheet.%s.0', $language));
         if ($file) {
             $fp = $this->createAsset($file);
             $node->legacy['refs']['relatedTo'][$this->getKey()][] = $fp;
         }
         unset($node->field_product_data_sheet);
 
-        $url = $this->resolveDotNotation($nodeArray, 'field_website_deep_link.und.0.url');
+        $url = $this->resolveDotNotation($nodeArray, sprintf('field_website_deep_link.%s.0.url', $language));
         if ($url) $node->website = $url;
         unset($node->field_website_deep_link);
 
-        $partNumber = $this->resolveDotNotation($nodeArray, 'field_product_part_number.und.0.value');
+        $partNumber = $this->resolveDotNotation($nodeArray, sprintf('field_product_part_number.%s.0.value', $language));
         if ($partNumber) $node->partNumber = $partNumber;
         unset($node->field_product_part_number);
 
-        $msrp = $this->resolveDotNotation($nodeArray, 'field_list_price.und.0.value');
+        $msrp = $this->resolveDotNotation($nodeArray, sprintf('field_list_price.%s.0.value', $language));
         if ($msrp) $node->msrp = $msrp;
         unset($node->field_list_price);
 
-        $url = $this->resolveDotNotation($nodeArray, 'field_unbounce_url.und.0.url');
+        $url = $this->resolveDotNotation($nodeArray, sprintf('field_unbounce_url.%s.0.url', $language));
         if ($url) {
             $field = (in_array($node->type, ['Webinar', 'Whitepaper', 'Promotion'])) ? 'linkUrl' : 'website';
             $node->{$field} = $url;
         }
         unset($node->field_unbounce_url);
 
-        $body = $this->resolveDotNotation($nodeArray, 'field_whitepaper_full_text.und.0.value');
+        $body = $this->resolveDotNotation($nodeArray, sprintf('field_whitepaper_full_text.%s.0.value', $language));
         if ($body) $node->body = $body;
         unset($node->field_whitepaper_full_text);
 
-        $file = $this->resolveDotNotation($nodeArray, 'field_lead_gen_file.und.0');
+        $file = $this->resolveDotNotation($nodeArray, sprintf('field_lead_gen_file.%s.0', $language));
         if ($file) {
             $fp = $this->createAsset($file);
             $node->legacy['refs']['relatedTo'][$this->getKey()][] = $fp;
@@ -1644,10 +1653,11 @@ abstract class Export extends AbstractExport
      */
     protected function convertScheduling(&$node)
     {
+        $language = $node->language ? $node->language : 'und';
         $nid = $node->nid;
         $issue = $node->field_magazine_issue;
         if (!empty($issue)) {
-            $issueNid = $issue['und'][0]['nid'];
+            $issueNid = $issue[$language][0]['nid'];
             if (!empty($issueNid)) {
                 $issue = node_load($issueNid);
 
