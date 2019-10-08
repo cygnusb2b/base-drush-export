@@ -1141,6 +1141,13 @@ abstract class Export extends AbstractExport
             unset($node->{sprintf('field_term_%s', $type)});
         }
 
+        // Set company type field
+        $value = $this->resolveDotNotation($nodeArray, sprintf('field_term_company_type.%s.0', $language));
+        if ($value) {
+            $term = taxonomy_term_load($value['tid']);
+            if ($term) $node->companyType = $term->name;
+        }
+
         $allTerms = $this->resolveDotNotation($nodeArray, sprintf('field_allterms.%s', $language));
         if (!empty($allTerms)) {
             foreach ($allTerms as $ref) {
