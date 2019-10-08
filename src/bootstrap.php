@@ -42,6 +42,9 @@ if ('pw' == $key) $class = 'Cygnus\DrushExport\PMMI\PW';
 if ('pfw' == $key) $class = 'Cygnus\DrushExport\PMMI\PFW';
 if ('id' == $key) $class = 'Cygnus\DrushExport\PMMI\ID';
 if ('mnet' == $key) $class = 'Cygnus\DrushExport\PMMI\MNET';
+if ('lsl' == $key) $class = 'Cygnus\DrushExport\PMMI\LSL';
+if ('sc' == $key) $class = 'Cygnus\DrushExport\PMMI\SC';
+// if ('gp' == $key) $class = 'Cygnus\DrushExport\PMMI\GP'; // drupal 6 :|
 
 $export = new $class($key, $dsn);
 $export->execute();
