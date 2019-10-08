@@ -747,6 +747,7 @@ abstract class Export extends AbstractExport
         $dcarr = json_decode(json_encode($dc, 512), true);
         $language = $dc->language ? $dc->language : 'und';
 
+        // @todo Create as public contact
         $value = $this->resolveDotNotation($dcarr, sprintf('field_ld_contact.%s.0.value', $language));
         if ($value) $node->ldc['contact']['name'] = $value;
 
@@ -762,9 +763,9 @@ abstract class Export extends AbstractExport
 
         $value = $this->resolveDotNotation($dcarr, sprintf('field_ld_logo.%s.0', $language));
         if ($value) {
-            $fp = $this->createImage($value);
+            $extra = ['isLogo' => true];
+            $fp = $this->createImage($value, null, null, $extra);
             $this->pushImageRef($node, $fp);
-            $node->ldc['logo'] = $fp;
         }
 
         /**
@@ -787,6 +788,7 @@ abstract class Export extends AbstractExport
          * ORDER BY C.delta ASC;
          *
          */
+        //  @todo create as related TextAds/Promotions
         $values = $this->resolveDotNotation($dcarr, sprintf('field_ld_product_photo.%s', $language));
         if ($values) {
             foreach ($values as $value) {
@@ -806,14 +808,13 @@ abstract class Export extends AbstractExport
         }
 
         $value = $this->resolveDotNotation($dcarr, sprintf('field_ld_teaser.%s.0.value', $language));
-        if ($value) $node->ldc['teaser'] = $value;
-
+        if ($value) $node->teaser = $value;
 
         $this->convertFields($dc);
         $dcarr = json_decode(json_encode($dc, 512), true);
 
-        $node->lop['name'] = $this->resolveDotNotation($dcarr, 'name');
-        $node->lop['body'] = $this->resolveDotNotation($dcarr, 'body');
+        $node->name = $this->resolveDotNotation($dcarr, 'name');
+        $node->body = $this->resolveDotNotation($dcarr, 'body');
 
         foreach ($dcarr['mutations']['Website']['redirects'] as $redirect) {
             $node->mutations['Website']['redirects'][] = $redirect;
@@ -829,56 +830,73 @@ abstract class Export extends AbstractExport
         $oparr = json_decode(json_encode($op, 512), true);
         $language = $op->language ? $op->language : 'und';
 
-        $value = $this->resolveDotNotation($oparr, sprintf('field_ld_employees.%s.0.value', $language));
-        if ($value) $node->lop['employees'] = $value;
+        $socialFields = ['facebook', 'linkedin', 'pinterest', 'twitter', 'youtube'];
+        foreach ($socialFields as $field) {
+            $value = $this->resolveDotNotation($oparr, sprintf('field_ld_%s.%s.0.value', $field, $language));
+            if ($value) {
+                $url = 1 === preg_match('/^http/', $value) ? $value : sprintf('https://%s', $value);
+                $node->socialLinks[] = [
+                    'provider'  => $field,
+                    'label'     => ucfirst($field),
+                    'url'       => $url,
+                ];
+            }
+        }
 
-        $value = $this->resolveDotNotation($oparr, sprintf('field_ld_facebook.%s.0.value', $language));
-        if ($value) $node->lop['facebook'] = $value;
+        $value = $this->resolveDotNotation($oparr, sprintf('field_youtube_username.%s.0.value', $language));
+        if ($value) {
+            $override = $this->resolveDotNotation($oparr, sprintf('field_youtube_username_override.%s.0.value', $language), false);
+            $template = $override ? 'https://youtube.com/channel/%s' : 'https://youtube.com/%s';
+            $url = sprintf($template, $value);
+            $node->socialLinks[] = [
+                'provider'  => 'youtube',
+                'label'     => 'Youtube',
+                'url'       => $url,
+            ];
+        }
 
-        $value = $this->resolveDotNotation($oparr, sprintf('field_ld_linkedin.%s.0.value', $language));
-        if ($value) $node->lop['linkedin'] = $value;
+        $value = $this->resolveDotNotation($oparr, sprintf('field_youtube_video.%s.0.input', $language));
+        if ($value) {
+            // @todo this should be an embedded video
+            $url = 1 === preg_match('/^http/', $value) ? $value : sprintf('https://%s', $value);
+            $node->socialLinks[] = [
+                'provider'  => 'youtube',
+                'label'     => 'Youtube',
+                'url'       => $url,
+            ];
+        }
 
         $value = $this->resolveDotNotation($oparr, sprintf('field_ld_logo.%s.0', $language));
         if ($value) {
-            $fp = $this->createImage($value);
+            $extra = [
+                'isLogo'    => true,
+                'mutations' => [
+                    'Website'   => [
+                        'active'    => true,
+                    ],
+                ],
+            ];
+            $fp = $this->createImage($value, null, null, $extra);
             $this->pushImageRef($node, $fp);
-            $node->lop['logo'] = $fp;
         }
 
-        $value = $this->resolveDotNotation($oparr, sprintf('field_ld_pinterest.%s.0.value', $language));
-        if ($value) $node->lop['pinterest'] = $value;
+        $value = $this->resolveDotNotation($oparr, sprintf('field_ld_employees.%s.0.value', $language));
+        if ($value) $node->numberOfEmployees = $value;
 
         $value = $this->resolveDotNotation($oparr, sprintf('field_ld_training.%s.0.value', $language));
-        if ($value) $node->lop['training'] = $value;
-
-        $value = $this->resolveDotNotation($oparr, sprintf('field_ld_twitter.%s.0.value', $language));
-        if ($value) $node->lop['twitter'] = $value;
+        if ($value) $node->trainingInformation = $value;
 
         $value = $this->resolveDotNotation($oparr, sprintf('field_ld_years.%s.0.value', $language));
-        if ($value) $node->lop['years'] = $value;
-
-        $value = $this->resolveDotNotation($oparr, sprintf('field_ld_youtube.%s.0.value', $language));
-        if ($value) $node->lop['youtube'] = $value;
-
-        $value = $this->resolveDotNotation($oparr, sprintf('field_youtube_username.%s.0.value', $language));
-        if ($value) $node->lop['youtube_username'] = $value;
-
-        $value = $this->resolveDotNotation($oparr, sprintf('field_youtube_video.%s.0.value', $language));
-        if ($value) $node->lop['youtube_video'] = $value;
+        if ($value) $node->yearsInOperation = $value;
 
         $value = $this->resolveDotNotation($oparr, sprintf('field_ld_geo_distrib.%s.0.value', $language));
-        if ($value) $node->lop['geographic_sales_diistribution'] = $value;
+        if ($value) $node->salesRegion = $value;
 
         $value = $this->resolveDotNotation($oparr, sprintf('field_ld_services.%s.0.value', $language));
-        if ($value) $node->lop['services'] = $value;
-
+        if ($value) $node->servicesProvided = $value;
 
         $values = $this->resolveDotNotation($oparr, sprintf('field_ld_sales.%s', $language));
-        if ($values) {
-            foreach ($values as $value) {
-                $node->lop['sales_channels'][] = $value['value'];
-            }
-        }
+        if ($values) $node->salesChannels = join(', ', array_map(function ($v) { return $v['value']; }, $values));
 
         $this->convertFields($op);
         $oparr = json_decode(json_encode($op, 512), true);
@@ -934,23 +952,41 @@ abstract class Export extends AbstractExport
 
         $value = $this->resolveDotNotation($pparr, sprintf('field_ld_print_logo.%s.0', $language));
         if ($value) {
-            $fp = $this->createImage($value);
+            $extra = [
+                'mutations' => [
+                    'Magazine'   => [
+                        'active'    => true,
+                    ],
+                ],
+            ];
+            $fp = $this->createImage($value, null, null, $extra);
             $this->pushImageRef($node, $fp);
-            $node->lpp['print_logo'] = $fp;
         }
 
         $value = $this->resolveDotNotation($pparr, sprintf('field_ld_print_photo_1.%s.0', $language));
         if ($value) {
-            $fp = $this->createImage($value);
+            $extra = [
+                'mutations' => [
+                    'Magazine'   => [
+                        'active'    => true,
+                    ],
+                ],
+            ];
+            $fp = $this->createImage($value, null, null, $extra);
             $this->pushImageRef($node, $fp);
-            $node->lpp['print_photo_1'] = $fp;
         }
 
         $value = $this->resolveDotNotation($pparr, sprintf('field_ld_print_photo_2.%s.0', $language));
         if ($value) {
-            $fp = $this->createImage($value);
+            $extra = [
+                'mutations' => [
+                    'Magazine'   => [
+                        'active'    => true,
+                    ],
+                ],
+            ];
+            $fp = $this->createImage($value, null, null, $extra);
             $this->pushImageRef($node, $fp);
-            $node->lpp['print_photo_2'] = $fp;
         }
 
         $this->convertFields($pp);
@@ -1487,7 +1523,7 @@ abstract class Export extends AbstractExport
      * Creates an image to create as Asset in base4
      *
      */
-    protected function createImage($img, $caption = null, $date = null)
+    protected function createImage($img, $caption = null, $date = null, $extra = [])
     {
         if (!$img) throw new \InvalidArgumentException('Unable to process image!');
         if (isset($img['thumbnail_fid'])) {
@@ -1523,6 +1559,10 @@ abstract class Export extends AbstractExport
                 'created'   => $date,
             ]
         ];
+
+        foreach ($extra as $k => $v) {
+            $kv[$k] = $v;
+        }
 
         $filter = ['_id' => $id];
         $update = ['$set' => $kv];
