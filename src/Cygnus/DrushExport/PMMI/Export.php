@@ -141,7 +141,6 @@ abstract class Export extends AbstractExport
         $inQuery = implode(',', array_fill(0, count($types), '?'));
         $debugQuery = ($this->debugNid) ? ' and nid = ' . $this->debugNid : '';
         $query = sprintf('SELECT count(*) as count from {node} where type in (%s) %s', $inQuery, $debugQuery);
-        if ($this->debugNid) $query .= ' and nid = ' . $this->debugNid;
         $resource = db_query($query, $types);
         $count = reset($this->getRaw($resource));
         return (int) $count->count;
@@ -747,63 +746,53 @@ abstract class Export extends AbstractExport
         $dcarr = json_decode(json_encode($dc, 512), true);
         $language = $dc->language ? $dc->language : 'und';
 
-        // @todo Create as public contact
-        $value = $this->resolveDotNotation($dcarr, sprintf('field_ld_contact.%s.0.value', $language));
-        if ($value) $node->ldc['contact']['name'] = $value;
+        $name = $this->resolveDotNotation($dcarr, sprintf('field_ld_contact.%s.0.value', $language));
+        if ($name) {
+            $kv = ['name'  => $name];
 
-        $value = $this->resolveDotNotation($dcarr, sprintf('field_ld_contact_photo.%s.0', $language));
-        if ($value) {
-            $fp = $this->createImage($value);
-            $this->pushImageRef($node, $fp);
-            $node->ldc['contact']['photo'] = $fp;
+            $title = $this->resolveDotNotation($dcarr, sprintf('field_ld_contact_title.%s.0.value', $language));
+            if ($title) $kv['title'] = $title;
+
+            $photo = $this->resolveDotNotation($dcarr, sprintf('field_ld_contact_photo.%s.0', $language));
+            if ($photo) {
+                $fp = $this->createImage($photo);
+                $kv['legacy']['refs']['images'][$this->getKey()][] = $fp;
+                $kv['legacy']['refs']['primaryImage'][$this->getKey()] = $fp;
+            }
+
+            $this->importContact($kv);
+            $node->legacy['refs']['publicContacts'][$this->getKey()][] = $name;
         }
 
-        $value = $this->resolveDotNotation($dcarr, sprintf('field_ld_contact_title.%s.0.value', $language));
-        if ($value) $node->ldc['contact']['title'] = $value;
-
-        $value = $this->resolveDotNotation($dcarr, sprintf('field_ld_logo.%s.0', $language));
-        if ($value) {
-            $extra = ['isLogo' => true];
-            $fp = $this->createImage($value, null, null, $extra);
-            $this->pushImageRef($node, $fp);
-        }
-
-        /**
-         * fucking weird field_collection-item nonsense
-         *
-         * `field_data_field_ld_product_photo` contains multiple references to collection-item
-         * SELECT
-         * 	C.entity_id as nid,
-         *     P.field_ld_product_photos_fid as fid,
-         *     P.field_ld_product_photos_alt as alt,
-         *     P.field_ld_product_photos_title as title
-         *
-         * FROM `field_data_field_ld_product_photo` C
-         *
-         * LEFT JOIN `field_data_field_ld_product_photos` P
-         *     ON P.entity_id = C.field_ld_product_photo_value
-         *     AND P.revision_id = C.field_ld_product_photo_revision_id
-         *
-         * WHERE C.entity_id = 35796
-         * ORDER BY C.delta ASC;
-         *
-         */
-        //  @todo create as related TextAds/Promotions
         $values = $this->resolveDotNotation($dcarr, sprintf('field_ld_product_photo.%s', $language));
         if ($values) {
             foreach ($values as $value) {
                 $fc = field_collection_field_get_entity($value);
                 if (!$fc) continue;
                 $fcArr = json_decode(json_encode($fc, 512), true);
+                $url = $this->resolveDotNotation($fcArr, sprintf('field_ld_link.%s.0.value', $language));
+                $url = 1 === preg_match('/^http/', $url) ? $url : sprintf('http://%s', $url);
                 $kv = [
-                    'link'  => $this->resolveDotNotation($fcArr, sprintf('field_ld_link.%s.0.value', $language)),
-                    'title'  => $this->resolveDotNotation($fcArr, sprintf('field_ld_photo_title.%s.0.value', $language)),
+                    'linkUrl'  => $url,
+                    'linkText'  => $this->resolveDotNotation($fcArr, sprintf('field_ld_photo_title.%s.0.value', $language)),
+                    'legacy'    => [
+                        'id'    => $fc->item_id,
+                        'source' => $this->getKey(),
+                        'refs'  => [
+                            'company'   => [$this->getKey() => $node->legacy['id']],
+                        ],
+                    ],
                 ];
+
                 $image = $this->resolveDotNotation($fcArr, sprintf('field_ld_product_photos.%s.0', $language));
-                $fp = $this->createImage($image);
-                $kv['image'] = $fp;
-                $this->pushImageRef($node, $fp);
-                $node->ldc['productPhotos'][] = $kv;
+                if (!$image) $image = $this->resolveDotNotation($fcArr, sprintf('field_ld_prod_photos.%s.0', $language));
+                if ($image) {
+                    $fp = $this->createImage($image);
+                    $kv['legacy']['refs']['images'][$this->getKey()][] = $fp;
+                    $kv['legacy']['refs']['primaryImage'][$this->getKey()] = $fp;
+                }
+
+                $this->importPromotion($kv);
             }
         }
 
@@ -901,8 +890,11 @@ abstract class Export extends AbstractExport
         $this->convertFields($op);
         $oparr = json_decode(json_encode($op, 512), true);
 
-        $node->lop['name'] = $this->resolveDotNotation($oparr, 'name');
-        $node->lop['body'] = $this->resolveDotNotation($oparr, 'body');
+        $value = $this->resolveDotNotation($oparr, 'name');
+        if ($value) $node->name = $value;
+
+        $value = $this->resolveDotNotation($oparr, 'body');
+        if ($value) $node->body = $value;
 
         foreach ($oparr['mutations']['Website']['redirects'] as $redirect) {
             $node->mutations['Website']['redirects'][] = $redirect;
@@ -992,8 +984,11 @@ abstract class Export extends AbstractExport
         $this->convertFields($pp);
         $pparr = json_decode(json_encode($pp, 512), true);
 
-        $node->lpp['name'] = $this->resolveDotNotation($pparr, 'name');
-        $node->lpp['body'] = $this->resolveDotNotation($pparr, 'body');
+        $value = $this->resolveDotNotation($pparr, 'name');
+        if ($value) $node->mutations['Magazine']['name'] = $value;
+
+        $value = $this->resolveDotNotation($pparr, 'body');
+        if ($value) $node->mutations['Magazine']['body'] = $value;
 
         foreach ($pparr['mutations']['Website']['redirects'] as $redirect) {
             $node->mutations['Website']['redirects'][] = $redirect;
@@ -1104,7 +1099,7 @@ abstract class Export extends AbstractExport
         unset($node->field_summary);
 
         $author = $this->resolveDotNotation($nodeArray, sprintf('field_byline.%s.0.value', $language));
-        if (!$author) $author = $this->resolveDotNotation($nodeArray, 'name');
+        // if (!$author) $author = $this->resolveDotNotation($nodeArray, 'name');
         if ($author) {
             list($first, $last) = explode(' ', $author, 2);
             $title = $this->resolveDotNotation($nodeArray, sprintf('field_author_title.%s.0.value', $language));
@@ -1297,10 +1292,18 @@ abstract class Export extends AbstractExport
         ];
         unset($node->field_youtube_username);
 
-        $logo = $this->resolveDotNotation($nodeArray, sprintf('field_logo.%s', $language));
-        if ($logo) {
-            $fp = $this->createImage($logo);
-            $node->legacy['refs']['logo'][] = $fp;
+        $value = $this->resolveDotNotation($nodeArray, sprintf('field_logo.%s', $language));
+        if ($value) {
+            $extra = [
+                'isLogo'    => true,
+                'mutations' => [
+                    'Website'   => [
+                        'active'    => true,
+                    ],
+                ],
+            ];
+            $fp = $this->createImage($value, null, null, $extra);
+            $this->pushImageRef($node, $fp);
         }
         unset($node->field_logo);
 
@@ -1676,11 +1679,30 @@ abstract class Export extends AbstractExport
     protected function importContact($contact)
     {
         $contact['type'] = 'Contact';
-        $contact['name'] = sprintf('%s %s', $contact['firstName'], $contact['lastName']);
-        $contact['legacy'] = ['id' => $contact['name'], 'source' => $this->getKey()];
+        if (!$contact['name']) {
+            $contact['name'] = sprintf('%s %s', $contact['firstName'], $contact['lastName']);
+        }
+        $contact['legacy']['id'] = $contact['name'];
+        $contact['legacy']['source'] = $this->getKey();
 
-        $filter = ['legacy.id' => $contact['name']];
+        $filter = ['legacy.id' => $contact['name'], 'legacy.source' => $this->getKey()];
         $update = ['$set' => $contact];
+        return $this->dbal->upsert($this->database, 'Content', $filter, $update);
+    }
+
+    /**
+     * {@inheritdoc}
+     *
+     * Creates an image to create as Asset in base4
+     *
+     */
+    protected function importPromotion($kv)
+    {
+        $kv['type'] = 'Promotion';
+        $kv['legacy']['source'] = $this->getKey();
+
+        $filter = ['legacy.id' => $kv['legacy']['id'], 'legacy.source' => $this->getKey()];
+        $update = ['$set' => $kv];
         return $this->dbal->upsert($this->database, 'Content', $filter, $update);
     }
 
