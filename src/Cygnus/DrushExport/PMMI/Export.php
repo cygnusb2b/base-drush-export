@@ -773,7 +773,8 @@ abstract class Export extends AbstractExport
                 $url = $this->resolveDotNotation($fcArr, sprintf('field_ld_link.%s.0.value', $language));
                 $url = 1 === preg_match('/^http/', $url) ? $url : sprintf('http://%s', $url);
                 $kv = [
-                    'linkUrl'  => $url,
+                    'name'      => sprintf('%s Product Photo', $node->title),
+                    'linkUrl'   => $url,
                     'linkText'  => $this->resolveDotNotation($fcArr, sprintf('field_ld_photo_title.%s.0.value', $language)),
                     'legacy'    => [
                         'id'    => $fc->item_id,
