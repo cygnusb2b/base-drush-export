@@ -1130,12 +1130,7 @@ abstract class Export extends AbstractExport
                 foreach ($refs as $ref) {
                     $term = taxonomy_term_load($ref['tid']);
                     $id = sprintf('%s_%s', $term->vid, $ref['tid']);
-                    $node->legacy['refs']['taxonomy'][$this->getKey()][] = [
-                        '$ref'  => 'Taxonomy',
-                        '$id'   => $id,
-                        '$db'   => 'drupal_pmmi_aw',
-                        'type'  => $type
-                    ];
+                    $node->legacy['refs']['taxonomy'][$this->getKey()][] = $id;
                 }
             }
             unset($node->{sprintf('field_term_%s', $type)});
@@ -1153,12 +1148,7 @@ abstract class Export extends AbstractExport
             foreach ($allTerms as $ref) {
                 $term = taxonomy_term_load($ref['tid']);
                 $id = sprintf('%s_%s', $term->vid, $ref['tid']);
-                $node->legacy['refs']['taxonomy'][$this->getKey()][] = [
-                    '$ref'  => 'Taxonomy',
-                    '$id'   =>  $id,
-                    '$db'   => 'drupal_pmmi_aw',
-                    'type'  => $this->loadVocabMachineName($ref['vid']),
-                ];
+                $node->legacy['refs']['taxonomy'][$this->getKey()][] = $id;
             }
         }
         unset($node->field_allterms);
@@ -1328,12 +1318,7 @@ abstract class Export extends AbstractExport
         if ($tid) {
             $term = taxonomy_term_load($tid);
             $id = sprintf('%s_%s', $term->vid, $tid);
-            $node->legacy['refs']['taxonomy'][$this->getKey()][] = [
-                '$ref'  => 'Taxonomy',
-                '$id'   => $id,
-                '$db'   => 'drupal_pmmi_aw',
-                'type'  => 'leadership_session',
-            ];
+            $node->legacy['refs']['taxonomy'][$this->getKey()][] = $id;
         }
         unset($node->field_ld_session);
 
