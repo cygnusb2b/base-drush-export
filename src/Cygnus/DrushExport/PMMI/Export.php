@@ -28,7 +28,7 @@ abstract class Export extends AbstractExport
         $this->writeln(sprintf('Starting import for %s', $this->key));
 
         // $this->importUsers();
-        $this->importTaxonomies();
+        // $this->importTaxonomies();
         $this->importNodes();
 
         $this->writeln('Import complete.', true, true);
@@ -43,7 +43,7 @@ abstract class Export extends AbstractExport
         $this->indent();
 
         // $this->importWebsiteSectionNodes();
-        $this->importMagazineIssueNodes();
+        // $this->importMagazineIssueNodes();
         $this->importContentNodes();
 
         $this->outdent();
@@ -704,6 +704,8 @@ abstract class Export extends AbstractExport
 
     protected function handleLeadershipScheduling(&$node, $printProfile)
     {
+        // Force reset this so we don't keep creating duplicates on re-runs.
+        $node->legacy['refs']['schedules'][$this->getKey()] = [];
         $company = json_decode(json_encode($node, 512), true);
         $printArr = json_decode(json_encode($printProfile, 512), true);
         $language = $node->language ? $node->language : 'und';
@@ -730,7 +732,7 @@ abstract class Export extends AbstractExport
                 foreach ($terms as $term) {
                     $sectionId = $this->getLeadershipSection($term);
                     if (!$sectionId) continue;
-                    $legacyId = sprintf('%s_%s', $term, $year);
+                    $legacyId = sprintf('%s_%s_%s', $node->nid, $term, $year);
                     $this->createScheduleRef($node, $legacyId, $sectionId, $startDate, $endDate);
                 }
             }
@@ -1055,6 +1057,9 @@ abstract class Export extends AbstractExport
 
         $node->legacy['refs']['createdBy'][$this->getKey()] = $node->uid;
         $node->legacy['refs']['updatedBy'][$this->getKey()] = $node->revision_uid;
+
+        // Force resets
+        $node->legacy['refs']['authors'][$this->getKey()] = [];
 
         $node->created = (int) $node->created;
         $node->updated = (int) $node->changed;
