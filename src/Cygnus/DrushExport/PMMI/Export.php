@@ -581,28 +581,29 @@ abstract class Export extends AbstractExport
                 $item = @paragraphs_item_load($id);
                 if (!$item) continue;
                 $itemArray = json_decode(json_encode($item, 512), true);
+                // @todo review captions and 0.value change
                 switch ($item->bundle) {
                     case 'embedded_text':
                         $items[] = $this->resolveDotNotation($itemArray, sprintf('field_embedded_text.%s.0.value', $language));
                         break;
                     case 'embedded_image':
-                        $caption = $this->resolveDotNotation($itemArray, sprintf('field_embedded_image_caption.%s.0', $language));
+                        $caption = $this->resolveDotNotation($itemArray, sprintf('field_embedded_image_caption.%s.0.value', $language));
                         $image = $this->resolveDotNotation($itemArray, sprintf('field_paragraphs_embedded_image.%s.0', $language));
                         if ($image) {
-                            $fp = $this->createImage($image);
+                            $fp = $this->createImage($image, $caption);
                             $this->pushImageRef($node, $fp);
-                            $items[] = sprintf('<div class="embedded-image"><img src="%s" class="embedded-image" alt="%s" /></div>', $fp, $caption);
+                            $items[] = sprintf('<div class="embedded-image"><img src="%s" /></div>', $fp, $caption);
                         }
                         break;
                     case 'headshot_widget':
-                        $author = $this->resolveDotNotation($itemArray, sprintf('field_author.%s.0', $language));
+                        $author = $this->resolveDotNotation($itemArray, sprintf('field_author.%s.0.value', $language));
                         $image = $this->resolveDotNotation($itemArray, sprintf('field_image.%s.0', $language));
-                        $jobTitle = $this->resolveDotNotation($itemArray, sprintf('field_job_title.%s.0', $language));
+                        $jobTitle = $this->resolveDotNotation($itemArray, sprintf('field_job_title.%s.0.value', $language));
                         $caption = $jobTitle ? sprintf('%s, %s', $author, $jobTitle) : $author;
                         if ($image) {
-                            $fp = $this->createImage($image);
+                            $fp = $this->createImage($image, $caption);
                             $this->pushImageRef($node, $fp);
-                            $items[] = sprintf('<div class="embedded-image"><img src="%s" class="embedded-image" data-align="right" alt="%s" /></div>', $fp, $caption);
+                            $items[] = sprintf('<div class="embedded-image"><img src="%s" data-align="right" /></div>', $fp);
                         }
                         break;
                     case 'embedded_video':
@@ -636,12 +637,12 @@ abstract class Export extends AbstractExport
                         }
                         break;
                     case 'sidebar':
-                        $caption = $this->resolveDotNotation($itemArray, sprintf('field_embedded_text.%s.0', $language));
+                        $caption = $this->resolveDotNotation($itemArray, sprintf('field_embedded_text.%s.0.value', $language));
                         $image = $this->resolveDotNotation($itemArray, sprintf('field_image.%s.0', $language));
                         if ($image) {
-                            $fp = $this->createImage($image);
+                            $fp = $this->createImage($image, $caption);
                             $this->pushImageRef($node, $fp);
-                            $items[] = sprintf('<div class="embedded-image"><img src="%s" class="embedded-image" data-align="right" alt="%s" /></div>', $fp, $caption);
+                            $items[] = sprintf('<div class="embedded-image"><img src="%s" data-align="right" /></div>', $fp);
                         } else {
                             $node->sidebars[] = $caption;
                         }
@@ -666,9 +667,9 @@ abstract class Export extends AbstractExport
                         break;
                     case 'downloadable_file':
                         $file = $this->resolveDotNotation($itemArray, sprintf('field_downloadable_file.%s.0', $language));
-                        $description = $this->resolveDotNotation($itemArray, sprintf('field_file_description.%s.0', $language));
+                        $description = $this->resolveDotNotation($itemArray, sprintf('field_file_description.%s.0.value', $language));
                         if ($file) {
-                            $fp = $this->createAsset($file, $description);
+                            $fp = $this->createAsset($file, 'Document', $description);
                             $node->legacy['refs']['assets'][$this->getKey()][] = $fp;
                             $items[] = sprintf('<div class="embedded-document"><a href="%s">%s</a></div>', $fp, $description);
                         }
@@ -750,6 +751,7 @@ abstract class Export extends AbstractExport
 
         $name = $this->resolveDotNotation($dcarr, sprintf('field_ld_contact.%s.0.value', $language));
         if ($name) {
+            $name = trim($name);
             $kv = ['name'  => $name];
 
             $title = $this->resolveDotNotation($dcarr, sprintf('field_ld_contact_title.%s.0.value', $language));
@@ -824,7 +826,7 @@ abstract class Export extends AbstractExport
 
         $socialFields = ['facebook', 'linkedin', 'pinterest', 'twitter', 'youtube'];
         foreach ($socialFields as $field) {
-            $value = $this->resolveDotNotation($oparr, sprintf('field_ld_%s.%s.0.value', $field, $language));
+            $value = $this->resolveDotNotation($oparr, sprintf('field_ld_%s.%s.0.url', $field, $language));
             if ($value) {
                 $url = 1 === preg_match('/^http/', $value) ? $value : sprintf('https://%s', $value);
                 $node->socialLinks[] = [
@@ -851,11 +853,7 @@ abstract class Export extends AbstractExport
         if ($value) {
             // @todo this should be an embedded video
             $url = 1 === preg_match('/^http/', $value) ? $value : sprintf('https://%s', $value);
-            $node->socialLinks[] = [
-                'provider'  => 'youtube',
-                'label'     => 'Youtube',
-                'url'       => $url,
-            ];
+            $node->youtubeVideo = $url;
         }
 
         $value = $this->resolveDotNotation($oparr, sprintf('field_ld_logo.%s.0', $language));
@@ -1001,6 +999,7 @@ abstract class Export extends AbstractExport
     protected function handleLeadershipData(&$node)
     {
         if ($node->type !== 'company' || !function_exists('leadership_get_corresponding_nid')) return;
+        $node->socialLinks = [];
 
         $this->handleLeadershipDataCard($node);
         $this->handleLeadershipOnlineProfile($node);
@@ -1116,7 +1115,6 @@ abstract class Export extends AbstractExport
             ]);
             $node->legacy['refs']['authors'][$this->getKey()][] = trim($author);
         }
-
 
         $companies = $this->resolveDotNotation($nodeArray, sprintf('field_companies.%s', $language));
         if (!empty($companies)) {
@@ -1355,6 +1353,14 @@ abstract class Export extends AbstractExport
         if ($byline) $node->byline = $byline;
         unset($node->field_contributed_author);
 
+        $authors = $this->resolveDotNotation($nodeArray, sprintf('field_staff_author.%s', $language));
+        if (!empty($authors)) {
+            foreach ($authors as $author) {
+                $node->legacy['refs']['authors'][$this->getKey()][] = $author['nid'];
+            }
+        }
+
+
         if ($this->getKey() === 'id') {
             // Change the one stupid "podcast" on id to an article
             if ($node->_id === 20611) $node->type = 'Article';
@@ -1530,17 +1536,16 @@ abstract class Export extends AbstractExport
         if (isset($img['thumbnail_fid'])) {
             $id = (int) $img['thumbnail_fid'];
             $url = $img['thumbnail_url'];
-            $name = basename($url);
             $date = $date ? date('c', $date) : date('c');
         } else {
             $id = (int) $img['fid'];
             if ($id === 0) return;
             $url = file_create_url($img['uri']);
             $url = str_replace('http://default', $this->map['uri'], $url);
-            $name = $img['filename'];
             $date = date('c', $img['timestamp']);
         }
 
+        $name = preg_replace("/[^A-Za-z0-9\._]/", '_', urldecode(basename($url)));
         $newName = sprintf('%s_%s_%s', $this->getKey(), $id, $name);
 
         $kv = [
@@ -1552,8 +1557,8 @@ abstract class Export extends AbstractExport
                 'location'  => $url,
                 'name'      => $name,
             ],
-            'caption'   => $img['title'],
-            'alt'       => $img['alt'],
+            'caption'   => $img['title'] ? $img['title'] : $caption,
+            'alt'       => $img['alt'] ? $img['alt'] : $caption,
             'legacy'    => [
                 'id'        => $id,
                 'source'    => sprintf($this->getKey()),
@@ -1680,6 +1685,7 @@ abstract class Export extends AbstractExport
         if (!$contact['name']) {
             $contact['name'] = sprintf('%s %s', $contact['firstName'], $contact['lastName']);
         }
+        $contact['name'] = trim($contact['name']);
         $contact['legacy']['id'] = $contact['name'];
         $contact['legacy']['source'] = $this->getKey();
 
