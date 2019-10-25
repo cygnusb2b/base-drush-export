@@ -750,6 +750,7 @@ abstract class Export extends AbstractExport
         $language = $dc->language ? $dc->language : 'und';
 
         $name = $this->resolveDotNotation($dcarr, sprintf('field_ld_contact.%s.0.value', $language));
+        if (!$name) $name = $this->resolveDotNotation($dcarr, sprintf('field_field_ld_contact.%s.0.value', $language));
         if ($name) {
             $name = trim($name);
             $kv = ['name'  => $name];
@@ -802,13 +803,15 @@ abstract class Export extends AbstractExport
         }
 
         $value = $this->resolveDotNotation($dcarr, sprintf('field_ld_teaser.%s.0.value', $language));
+        if (!$value) $value = $this->resolveDotNotation($dcarr, sprintf('field_field_ld_teaser.%s.0.value', $language));
         if ($value) $node->teaser = $value;
 
         $this->convertFields($dc);
         $dcarr = json_decode(json_encode($dc, 512), true);
 
         $node->name = $this->resolveDotNotation($dcarr, 'name');
-        $node->body = $this->resolveDotNotation($dcarr, 'body');
+        $value = $this->resolveDotNotation($dcarr, 'body'); // product_summary
+        if ($value) $node->productSummary = $value;
 
         foreach ($dcarr['mutations']['Website']['redirects'] as $redirect) {
             $node->mutations['Website']['redirects'][] = $redirect;
@@ -835,18 +838,6 @@ abstract class Export extends AbstractExport
                     'url'       => $url,
                 ];
             }
-        }
-
-        $value = $this->resolveDotNotation($oparr, sprintf('field_youtube_username.%s.0.value', $language));
-        if ($value) {
-            $override = $this->resolveDotNotation($oparr, sprintf('field_youtube_username_override.%s.0.value', $language), false);
-            $template = $override ? 'https://youtube.com/channel/%s' : 'https://youtube.com/%s';
-            $url = sprintf($template, $value);
-            $node->socialLinks[] = [
-                'provider'  => 'youtube',
-                'label'     => 'Youtube',
-                'url'       => $url,
-            ];
         }
 
         $value = $this->resolveDotNotation($oparr, sprintf('field_youtube_video.%s.0.input', $language));
@@ -877,6 +868,9 @@ abstract class Export extends AbstractExport
         if ($value) $node->trainingInformation = $value;
 
         $value = $this->resolveDotNotation($oparr, sprintf('field_ld_years.%s.0.value', $language));
+        if ($value) $node->yearsInOperation = $value;
+
+        $value = $this->resolveDotNotation($oparr, sprintf('field_field_ld_years.%s.0.value', $language));
         if ($value) $node->yearsInOperation = $value;
 
         $value = $this->resolveDotNotation($oparr, sprintf('field_ld_geo_distrib.%s.0.value', $language));
@@ -1285,13 +1279,14 @@ abstract class Export extends AbstractExport
         //  field_sub_title, field_playbook_name, field_playbook_pdf, field_disclaimer
 
         // Companies
-        $youtube = $this->resolveDotNotation($nodeArray, sprintf('field_youtube_username.%s.value', $language));
-        if ($youtube) $node->socialLinks[] = [
-            'provider'  => 'youtube',
-            'label'     => 'Youtube',
-            'url'       => sprintf('https://youtube.com/%s', $youtube)
-        ];
+        $value = $this->resolveDotNotation($oparr, sprintf('field_youtube_username.%s.0.value', $language));
+        if ($value) {
+            $override = $this->resolveDotNotation($oparr, sprintf('field_youtube_username_override.%s.0.value', $language), false);
+            $field = $override ? 'channelId' : 'username';
+            $node->youtube[$field] = $value;
+        }
         unset($node->field_youtube_username);
+        unset($node->field_youtube_username_override);
 
         $value = $this->resolveDotNotation($nodeArray, sprintf('field_logo.%s', $language));
         if ($value) {
