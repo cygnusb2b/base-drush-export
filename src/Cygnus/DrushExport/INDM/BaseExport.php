@@ -1,6 +1,6 @@
 <?php
 
-namespace Cygnus\DrushExport\PMMI;
+namespace Cygnus\DrushExport\INDM;
 
 /**
  * Provides support for exporting from Drupal 7.5x
@@ -11,7 +11,7 @@ namespace Cygnus\DrushExport\PMMI;
  * ie: drush scr ~/environment/base-drush-export-master/build/export.phar [MONGO_IP] [IMPORT_KEY]
  *
  */
-class ID extends Export
+class BaseExport extends Export
 {
     // protected $debugNid = 38432;
     /**
