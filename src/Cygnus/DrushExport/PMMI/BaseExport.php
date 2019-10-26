@@ -1166,9 +1166,9 @@ class BaseExport extends Export
                 'Trends and Issues'             => 'Taxonomy\Topic',
             ],
             'Content'   => [
-                // '360_package_spin_rotate'   => 'Website\Content\Product',
-                // 'article'                   => 'Website\Content\Article',
-                // 'page'                      => 'Website\Content\Page',
+                '360_package_spin_rotate'   => 'Website\Content\Product',
+                'article'                   => 'Website\Content\Article',
+                'page'                      => 'Website\Content\Page',
                 'company'                   => 'Website\Content\Company',
                 'registration_form'         => 'Website\Content\Document',
                 'video'                     => 'Website\Content\Video',
