@@ -1124,7 +1124,7 @@ abstract class Export extends AbstractExport
         $companies = $this->resolveDotNotation($nodeArray, sprintf('field_companies.%s', $language));
         if (!empty($companies)) {
             foreach ($companies as $ref) {
-                $node->legacy['refs']['companies'][$this->getKey()][] = $ref['nid'];
+                $node->legacy['refs']['relatedTo'][$this->getKey()][] = $ref['nid'];
             }
         }
         unset($node->field_companies);
