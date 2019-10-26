@@ -1,6 +1,6 @@
 <?php
 
-namespace Cygnus\DrushExport\PMMI;
+namespace Cygnus\DrushExport\Informa;
 
 use Cygnus\DrushExport\AbstractExport;
 use DateTimeZone;
@@ -18,7 +18,7 @@ use MongoDB\BSON\UTCDateTime;
  */
 abstract class Export extends AbstractExport
 {
-    protected $debugNid;
+    protected $debugNid = 2;
 
     /**
      * Main export function.
@@ -52,23 +52,36 @@ abstract class Export extends AbstractExport
     // strip fields so they do not show as unsupported, once identified as useless
     protected function removeCrapFields(&$node)
     {
+        var_dump(__method__);
         foreach ($this->map['structure']['stripFields'] AS $removeField) {
             unset($node->$removeField);
         }
         foreach ($node as $key => $value) {
             if (empty($value)) unset($node->{$key});
-            if (stristr($key, 'field_')) unset($node->{$key});
+            if (stristr($key, 'field_')) {
+                //var_dump('unsetting field_ keys');
+                //var_dump($key);
+                unset($node->{$key});
+            }
         }
+
+        // @jpdev - fix this, no good now
         $node->legacy['raw'] = isset($node->legacy['raw']) ? $node->legacy['raw'] : [];
         foreach ($node->legacy['raw'] as $key => $value) {
             if (empty($value)) unset($node->legacy['raw'][$key]);
         }
-        $badRaw = ['data', 'rdf_mapping', 'field_alchemy_concepts', 'field_alchemy_entities', 'field_metadescriptionlong', 'field_metakeywordslong'];
+
+        // @jpdev - specific to hct?  removing to confirm
+        //$badRaw = ['data', 'rdf_mapping', 'field_alchemy_concepts', 'field_alchemy_entities', 'field_metadescriptionlong', 'field_metakeywordslong'];
+        $badRaw = [];
         foreach ($badRaw as $field) {
             unset($node->legacy['raw'][$field]);
         }
         // Remove bodies, some are too long
-        if ($this->getKey() == 'mnet') unset($node->legacy['raw']['body']);
+        if ($this->getKey() == 'mnet') {
+            var_dump('removing mnet');
+            unset($node->legacy['raw']['body']);
+        }
     }
 
     // get drupal field names from base4 names via config map
@@ -525,6 +538,8 @@ abstract class Export extends AbstractExport
      */
     protected function convertImages(&$node, $nodeArray)
     {
+        var_dump(__method__);
+        var_dump('need to update image fields');
         $images = [];
         $fields = [
             // Primary refs
@@ -748,11 +763,8 @@ abstract class Export extends AbstractExport
         $dc = node_load($dcid);
         $dcarr = json_decode(json_encode($dc, 512), true);
         $language = $dc->language ? $dc->language : 'und';
-        unset($dcarr['metatags']);
-        $node->legacy['ldc'] = $dcarr;
 
         $name = $this->resolveDotNotation($dcarr, sprintf('field_ld_contact.%s.0.value', $language));
-        if (!$name) $name = $this->resolveDotNotation($dcarr, sprintf('field_field_ld_contact.%s.0.value', $language));
         if ($name) {
             $name = trim($name);
             $kv = ['name'  => $name];
@@ -805,15 +817,13 @@ abstract class Export extends AbstractExport
         }
 
         $value = $this->resolveDotNotation($dcarr, sprintf('field_ld_teaser.%s.0.value', $language));
-        if (!$value) $value = $this->resolveDotNotation($dcarr, sprintf('field_field_ld_teaser.%s.0.value', $language));
         if ($value) $node->teaser = $value;
 
         $this->convertFields($dc);
         $dcarr = json_decode(json_encode($dc, 512), true);
 
         $node->name = $this->resolveDotNotation($dcarr, 'name');
-        $value = $this->resolveDotNotation($dcarr, 'body'); // product_summary
-        if ($value) $node->productSummary = $value;
+        $node->body = $this->resolveDotNotation($dcarr, 'body');
 
         foreach ($dcarr['mutations']['Website']['redirects'] as $redirect) {
             $node->mutations['Website']['redirects'][] = $redirect;
@@ -828,8 +838,6 @@ abstract class Export extends AbstractExport
         $op = node_load($opid);
         $oparr = json_decode(json_encode($op, 512), true);
         $language = $op->language ? $op->language : 'und';
-        unset($oparr['metatags']);
-        $node->legacy['lop'] = $oparr;
 
         $socialFields = ['facebook', 'linkedin', 'pinterest', 'twitter', 'youtube'];
         foreach ($socialFields as $field) {
@@ -842,6 +850,18 @@ abstract class Export extends AbstractExport
                     'url'       => $url,
                 ];
             }
+        }
+
+        $value = $this->resolveDotNotation($oparr, sprintf('field_youtube_username.%s.0.value', $language));
+        if ($value) {
+            $override = $this->resolveDotNotation($oparr, sprintf('field_youtube_username_override.%s.0.value', $language), false);
+            $template = $override ? 'https://youtube.com/channel/%s' : 'https://youtube.com/%s';
+            $url = sprintf($template, $value);
+            $node->socialLinks[] = [
+                'provider'  => 'youtube',
+                'label'     => 'Youtube',
+                'url'       => $url,
+            ];
         }
 
         $value = $this->resolveDotNotation($oparr, sprintf('field_youtube_video.%s.0.input', $language));
@@ -872,9 +892,6 @@ abstract class Export extends AbstractExport
         if ($value) $node->trainingInformation = $value;
 
         $value = $this->resolveDotNotation($oparr, sprintf('field_ld_years.%s.0.value', $language));
-        if ($value) $node->yearsInOperation = $value;
-
-        $value = $this->resolveDotNotation($oparr, sprintf('field_field_ld_years.%s.0.value', $language));
         if ($value) $node->yearsInOperation = $value;
 
         $value = $this->resolveDotNotation($oparr, sprintf('field_ld_geo_distrib.%s.0.value', $language));
@@ -910,8 +927,6 @@ abstract class Export extends AbstractExport
 
         $pparr = json_decode(json_encode($pp, 512), true);
         $language = $pp->language ? $pp->language : 'und';
-        unset($pparr['metatags']);
-        $node->legacy['lpc'] = $pparr;
 
         $value = $this->resolveDotNotation($pparr, sprintf('field_ld_address_1.%s.0.value', $language));
         if ($value) $node->address1 = $value;
@@ -1013,63 +1028,31 @@ abstract class Export extends AbstractExport
      */
     protected function convertFields(&$node)
     {
-        $this->handleLeadershipData($node);
+
         $nodeArray = json_decode(json_encode($node, 512), true);
         $language = $node->language ? $node->language : 'und';
 
-        // type
-        $node->type = str_replace('Website\\Content\\', '', $this->map['Content'][$node->type]);
-        $tid = $this->resolveDotNotation($nodeArray, sprintf('field_term_subtype.%s.0.tid', $language));
-        if (!$tid) $tid = $this->resolveDotNotation($nodeArray, sprintf('field_content_item_type.%s.0.tid', $language));
-        if (!$tid) $tid = $this->resolveDotNotation($nodeArray, sprintf('field_lead_gen_item_type.%s.0.tid', $language));
-        if ($tid) {
-            if (!isset($this->term_cache[$tid])) {
-                $type = taxonomy_term_load($tid);
-                $this->term_cache[$tid] = $type->name;
-            }
-            $type = $this->term_cache[$tid];
+        // @jpdev - move this some place earlier to apply to entire modifier at start
+        $node->legacy['raw'] =  $nodeArray;
 
-            if (in_array($type, ['News'])) $node->type = 'News';
-            if (in_array($type, ['Podcast'])) $node->type = 'Podcast';
-            if (in_array($type, ['Videos'])) $node->type = 'Video';
-            if (in_array($type, ['Blog', 'Perspective', 'Column', 'Column/Opinion'])) $node->type = 'Blog';
-            if (in_array($type, ['Industry Brief', 'Product Announcement', 'Controls Product Brief', 'Machine Product Brief', 'Materials Product Brief', 'Product Brief', 'Supplier News'])) $node->type = 'PressRelease';
-            if (in_array($type, ['Webinar'])) $node->type = 'Webinar';
-            if (in_array($type, ['White Paper', 'Case Study', 'Research Report', 'eBook', 'iReport'])) $node->type = 'Whitepaper';
-            if (in_array($type, ['Infographic'])) $node->type = 'Promotion';
-            if ($this->getKey() === 'id' && $nodeArray['type'] === 'lead_gen_item') {
-                if ($type === 'Video') $node->type = 'Promotion';
-            }
-            // @todo review additional types for OEM, PFW, PW
-            unset($node->field_term_subtype);
-            unset($node->field_content_item_type);
-        } else {
-            if ($this->getKey() === 'id' && $nodeArray['type'] === 'lead_gen_item') {
-                $node->type = 'Promotion';
-            }
-        }
+        //$origNode = clone ($node);
+        //$origNode = json_decode(json_encode($origNode, 512), true);
+        //$node->legacy['raw'] =  $origNode;
 
-        // _id
+        // @jpdev - maintaining _id may be a bad idea
         $node->_id = (int) $node->nid;
-        $node->name = $node->title;
+
+        $node->type = str_replace('Platform\\Content\\', '', $this->map['Content'][$node->type]);
+
+        // @jpdev - are our status bit values consistent with theirs?
         $node->status = (int) $node->status;
 
-        $node->legacy['refs']['createdBy'][$this->getKey()] = $node->uid;
-        $node->legacy['refs']['updatedBy'][$this->getKey()] = $node->revision_uid;
+        $node->name = $node->title;
 
-        // Force resets
-        $node->legacy['refs']['authors'][$this->getKey()] = [];
-
+        // dates
         $node->created = (int) $node->created;
         $node->updated = (int) $node->changed;
-        $node->published = (int) $node->created;
-
-        $unpublished = $this->resolveDotNotation($nodeArray, sprintf('field_expiration_date.%s.value', $language));
-        if ($unpublished) $node->unpublished = (int) $unpublished;
-        unset($node->field_expiration_date);
-
-        // Handle images
-        $this->convertImages($node, $nodeArray);
+        $node->published = strtotime($this->resolveDotNotation($nodeArray, sprintf('field_penton_published_datetime.%s.0.value', $language)));
 
         // Redirects
         $redirects = &$node->mutations['Website']['redirects'];
@@ -1083,6 +1066,33 @@ abstract class Export extends AbstractExport
         }
         $q = sprintf("SELECT source from {redirect} where source = 'node/%s'", $node->nid);
         foreach (db_query($q) as $r) $redirects[] = $r->source;
+        $node->mutations['Website']['redirects'] = $redirects;
+
+        // refs
+        $node->legacy['refs']['createdBy'][$this->getKey()] = $node->uid;
+        $node->legacy['refs']['updatedBy'][$this->getKey()] = $node->revision_uid;
+
+        // Images (Adds image to 'Image' object to middile db, also adds legacy.ref to node for linking after b4 Asset creation)
+        $this->convertImages($node, $nodeArray);
+
+
+
+
+
+        $this->removeCrapFields($node);
+
+
+        // just to test
+        //$node = $newNode;
+        /*
+        // removed leadership call
+        // removed content type defined by taxonomy code
+        // removed legacy.refs.authors reset (why was it in there?)
+        // removed unpublished field (none seen in source)
+
+
+
+
 
         // body
         $body = $this->resolveDotNotation($nodeArray, sprintf('body.%s.0.value', $language));
@@ -1285,14 +1295,13 @@ abstract class Export extends AbstractExport
         //  field_sub_title, field_playbook_name, field_playbook_pdf, field_disclaimer
 
         // Companies
-        $value = $this->resolveDotNotation($nodeArray, sprintf('field_youtube_username.%s.0.value', $language));
-        if ($value) {
-            $override = $this->resolveDotNotation($nodeArray, sprintf('field_youtube_username_override.%s.0.value', $language), false);
-            $field = $override ? 'channelId' : 'username';
-            $node->youtube[$field] = $value;
-        }
+        $youtube = $this->resolveDotNotation($nodeArray, sprintf('field_youtube_username.%s.value', $language));
+        if ($youtube) $node->socialLinks[] = [
+            'provider'  => 'youtube',
+            'label'     => 'Youtube',
+            'url'       => sprintf('https://youtube.com/%s', $youtube)
+        ];
         unset($node->field_youtube_username);
-        unset($node->field_youtube_username_override);
 
         $value = $this->resolveDotNotation($nodeArray, sprintf('field_logo.%s', $language));
         if ($value) {
@@ -1475,8 +1484,8 @@ abstract class Export extends AbstractExport
         }
         unset($node->field_lead_gen_file);
 
-        $this->removeCrapFields($node);
 
+        */
 
         // DEBUG TESTING
         $ok = [
@@ -1533,6 +1542,7 @@ abstract class Export extends AbstractExport
      */
     protected function createImage($img, $caption = null, $date = null, $extra = [])
     {
+        var_dump(__method__);
         if (!$img) throw new \InvalidArgumentException('Unable to process image!');
         if (isset($img['thumbnail_fid'])) {
             $id = (int) $img['thumbnail_fid'];
@@ -1573,6 +1583,9 @@ abstract class Export extends AbstractExport
 
         $filter = ['_id' => $id];
         $update = ['$set' => $kv];
+
+        var_dump($update);
+
         $this->dbal->upsert($this->database, 'Image', $filter, $update);
         return $url;
     }

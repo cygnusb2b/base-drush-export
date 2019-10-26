@@ -1,21 +1,16 @@
 <?php
 require_once 'phar://export.phar/vendor/autoload.php';
-// require_once 'phar://export.phar/src/Cygnus/DrushExport/AbstractExport.php';
-// require_once 'phar://export.phar/src/Cygnus/DrushExport/ExportD6.php';
-// require_once 'phar://export.phar/src/Cygnus/DrushExport/ExportNVP.php';
-// require_once 'phar://export.phar/src/Cygnus/DrushExport/ExportD7.php';
-// require_once 'phar://export.phar/src/Cygnus/DrushExport/ExportD75.php';
 
 define('DRUPAL_VERSION', function_exists('drush_core_status') ? drush_core_status('drupal-version')['drupal-version'] : null);
 
-$class = 'Cygnus\\DrushExport\\ExportD6';
-if (version_compare(DRUPAL_VERSION, '7.0') >= 0) {
-    if (version_compare(DRUPAL_VERSION, '7.5') >= 0) {
-        $class = 'Cygnus\\DrushExport\\ExportD75';
-    } else {
-        $class = 'Cygnus\\DrushExport\\ExportD7';
-    }
-}
+// $class = 'Cygnus\\DrushExport\\ExportD6';
+// if (version_compare(DRUPAL_VERSION, '7.0') >= 0) {
+//     if (version_compare(DRUPAL_VERSION, '7.5') >= 0) {
+//         $class = 'Cygnus\\DrushExport\\ExportD75';
+//     } else {
+//         $class = 'Cygnus\\DrushExport\\ExportD7';
+//     }
+// }
 
 ini_set('memory_limit', -1);
 set_time_limit(0);
@@ -34,17 +29,17 @@ if (!$key) {
 }
 $dsn = false === stristr($dsn, 'mongodb://') ? sprintf('mongodb://%s', $dsn) : $dsn;
 
-if ('nashvillepost' == $key) $class = 'Cygnus\\DrushExport\\ExportNVP';
-if ('aw' == $key) $class = 'Cygnus\DrushExport\PMMI\AW';
-if ('hp' == $key) $class = 'Cygnus\DrushExport\PMMI\HP';
-if ('oem' == $key) $class = 'Cygnus\DrushExport\PMMI\OEM';
-if ('pw' == $key) $class = 'Cygnus\DrushExport\PMMI\PW';
-if ('pfw' == $key) $class = 'Cygnus\DrushExport\PMMI\PFW';
-if ('id' == $key) $class = 'Cygnus\DrushExport\PMMI\ID';
-if ('mnet' == $key) $class = 'Cygnus\DrushExport\PMMI\MNET';
-if ('lsl' == $key) $class = 'Cygnus\DrushExport\PMMI\LSL';
-if ('sc' == $key) $class = 'Cygnus\DrushExport\PMMI\SC';
+$pmmi = ['aw', 'hp', 'oem', 'pw', 'pfw', 'lsl', 'sc'];
+if (in_array($key, $pmmi)) $class = 'Cygnus\DrushExport\PMMI\BaseExport';
 // if ('gp' == $key) $class = 'Cygnus\DrushExport\PMMI\GP'; // drupal 6 :|
+
+$indm = ['id', 'mnet'];
+if (in_array($key, $indm)) $class = 'Cygnus\DrushExport\INDM\BaseExport';
+
+$informa = ['industryweek'];
+if (in_array($key, $informa)) $class ='Cygnus\DrushExport\Informa\BaseExport';
+
+if (!$class) throw new \InvalidArgumentException('Unable to find a valid import class.');
 
 $export = new $class($key, $dsn);
 $export->execute();
