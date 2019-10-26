@@ -1,6 +1,6 @@
 <?php
 
-namespace Cygnus\DrushExport\PMMI;
+namespace Cygnus\DrushExport\INDM;
 
 use Cygnus\DrushExport\AbstractExport;
 use DateTimeZone;

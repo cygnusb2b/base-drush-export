@@ -29,18 +29,15 @@ if (!$key) {
 }
 $dsn = false === stristr($dsn, 'mongodb://') ? sprintf('mongodb://%s', $dsn) : $dsn;
 
-// if ('nashvillepost' == $key) $class = 'Cygnus\\DrushExport\\ExportNVP';
-
 $pmmi = ['aw', 'hp', 'oem', 'pw', 'pfw', 'lsl', 'sc'];
-if (in_array($key, $pmmi)) $class = sprintf('Cygnus\DrushExport\PMMI\%s', strtoupper($key));
+if (in_array($key, $pmmi)) $class = 'Cygnus\DrushExport\PMMI\BaseExport';
 // if ('gp' == $key) $class = 'Cygnus\DrushExport\PMMI\GP'; // drupal 6 :|
 
 $indm = ['id', 'mnet'];
-if (in_array($key, $indm)) $class = sprintf('Cygnus\DrushExport\PMMI\%s', strtoupper($key));
+if (in_array($key, $indm)) $class = 'Cygnus\DrushExport\INDM\BaseExport';
 
 $informa = ['industryweek'];
 if (in_array($key, $informa)) $class ='Cygnus\DrushExport\Informa\BaseExport';
-// $class = sprintf('Cygnus\DrushExport\Informa\%s', ucfirst($key));
 
 if (!$class) throw new \InvalidArgumentException('Unable to find a valid import class.');
 
