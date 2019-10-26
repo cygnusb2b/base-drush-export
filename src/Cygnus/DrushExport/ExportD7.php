@@ -8,12 +8,73 @@ use DateTime;
 /**
  * Provides support for exporting from Drupal 7
  */
-class ExportD7 extends Export
+class ExportD7 extends AbstractExport
 {
     /**
      * {@inheritdoc}
      */
     protected $configs = [
+        'automationworld'   => [
+            'Content'   => [
+                '360_package_spin_rotate' => 'Platform\\Content\\Product',      // Needs some custom field handling for the 3D display
+                'apps'  => 'Platform\\Content\\Product',                        // Custom field handling
+                'around_the_world'  => 'Platform\\Content\\Article',            // Around the world section/blog
+
+                // Sub types! @todo
+                'article' => 'Platform\\Content\\Article',                      // Make all Articles by default
+                'article__news' => 'Platform\\Content\\News',                   // Custom sub type mappings
+                'article__perspective'  => 'Platform\\Content\\Blog',
+                'article__column'  => 'Platform\\Content\\Blog',
+
+                'page'  => 'Platform\\Content\\Page',
+                'blog'  => 'Platform\\Content\\Blog',
+                'company' => 'Platform\\Content\\Company',
+                'download'  => 'Platform\\Content\\Document',
+                // 'form_template'
+                // 'leadership_data_card'                                       // Additional information about companies, unsure where used.
+                // 'leadership_online_profile'                                  // More info,
+                // 'leadership_print_profile'                                   // More info, print revision??
+                'magazine_covers' => 'Magazine\\Issue',                         // magazine cover image, digital edition url
+                'mini_bant' => 'Platform\\Content\\TextAd',                     // Sponsored content, gated video/whitepaper landing page
+                // 'mobile_webform'
+                // 'opt_out_form'
+                'playbook'  => 'Platform\\Content\\Document',                   // May necessitate a custom content type, but a gated landing page for a PDF download
+                'podcast' => 'Platform\\Content\\Podcast',
+                // 'pop_up_registration'                                        // Popup ad form pushing to omeda sub
+                'registration_form' => 'Platform\\Content\\Document',           // Majority appear to be PDF gates (some weird ones like ENL signups)
+                'stage_one_form'  => 'Platform\\Content\\TextAd',               // Landing pages/promo blurbs pushing to registration_forms
+                'video' => 'Platform\\Content\\Video',
+                'webform' => 'Platform\\Content\\TextAd',                       // Same as stage_one_form
+                'webinar' => 'Platform\\Content\\Webinar',                      // All old, currently unpublished
+                'webinar_registration'  => 'Platform\\Content\\Webinar',        // Current webinar landing form
+                // 'webinar_series'
+                'week_in_review'  => 'Platform\\Content\\News',                 // News/sponsored review, "Beyond the Factory Walls" primary section??
+                'whitepaper'  => 'Platform\\Content\\Whitepaper',
+            ],
+            'Taxonomy' => [
+                // Static lists
+                'App Platforms/OS',
+                'Blog Beat',
+
+                // Hierarchical
+                'Automation Strategies',
+
+                'Column Type',
+                'Company Type',
+                'Coverage Type',
+                'DFP Ad Categories',
+                'Download Subtype',
+                'Industries',
+                'Industry Type',
+                'Leadership Session',
+                'Source Type',
+                'Sponsors',
+                'Subtype',
+                'Tags',
+                'Technologies',
+                'Topics',
+            ],
+        ],
         'arkansas'      => [
             'Taxonomy'  => [
                 'Focus Sections'    => 'Taxonomy\\Category',
@@ -432,7 +493,7 @@ class ExportD7 extends Export
     /**
      * {@inheritdoc}
      */
-    protected function createImage(array $img, $caption = null)
+    protected function createImage($img, $caption = null)
     {
         if ((int) $img['fid'] === 0) {
             return;

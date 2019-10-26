@@ -5,7 +5,7 @@ namespace Cygnus\DrushExport;
 /**
  * Provides support for exporting from Drupal 6
  */
-class ExportD6 extends Export
+class ExportD6 extends AbstractExport
 {
     /**
      * {@inheritdoc}
@@ -172,7 +172,7 @@ class ExportD6 extends Export
     /**
      * {@inheritdoc}
      */
-    protected function createImage(array $img, $caption = null)
+    protected function createImage($img, $caption = null)
     {
         if ((int) $img['fid'] === 0) {
             return;

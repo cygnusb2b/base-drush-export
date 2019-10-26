@@ -6,20 +6,148 @@ use DateTimeZone;
 use DateTime;
 
 /**
- * Provides support for exporting from Drupal 7
+ * Provides support for exporting from Drupal 7.5x
  *
  * Needs working (as in you can login to admin) site for drush to work
  * from drush repo root: php -d phar.readonly=0 compile
  * from drupal site root (ie /sites/heathcare-informatics/): drush scr $pathToPhar $mongoIp $importConfigKey
- * ie: drush scr /home/ec2-user/environment/base-drush-export-master/build/export.phar 10.0.12.156 hci
+ * ie: drush scr ~/environment/base-drush-export-master/build/export.phar [MONGO_IP] [IMPORT_KEY]
  *
  */
-class ExportD7HCI extends Export
+class ExportD75 extends AbstractExport
 {
     /**
      * {@inheritdoc}
      */
     protected $configs = [
+        'aw'  => [
+            'Taxonomy'  => [
+                // Static lists (prefix with key aka `Column Type: Feed Forward`)
+                'App Platforms/OS'          => 'Taxonomy\Bin',          // ~5 items
+                'Blog Beat'                 => 'Taxonomy\Bin',          // ~ 20 items
+                'Column Type'               => 'Taxonomy\Bin',          // ~ 10 items
+                'Company Type'              => 'Taxonomy\Bin',          // ~ 5 items
+                'Download Subtype'          => 'Taxonomy\Bin',          // 2 items (Tactical Brief, Whitepaper)
+                'Industry Type'             => 'Taxonomy\Bin',          // 4 items
+                'Leadership Session'        => 'Taxonomy\Bin',          // 5 items, years 2015-2019
+                'Source Type'               => 'Taxonomy\Bin',          // 5 items, used to denote UGC and/or display concerns
+                'Subtype'                   => 'Taxonomy\Bin',          // 12 items, used to determine article sub type
+
+                // Tags
+                'Tags'                      => 'Taxonomy\Tag',
+
+                // Hierarchical
+                'Automation Strategies'     => 'Taxonomy\Category',     // 100+ items
+                'Industries'                => 'Taxonomy\Industry',     // 20+ items (top categories?)
+                'Topics'                    => 'Taxonomy\Topic',        // 11 items
+
+                // New hierarchies, if kept
+                'Technologies'              => 'Taxonomy\Market',       // ~50 items, similar to `Industries` taxonomy (if kept, create Technologies instead of Market)
+                'Coverage Type'             => 'Taxonomy\Coverage',     // 20+ items, Similar to website sections?
+
+                // // Unused
+                // 'DFP Ad Categories',
+                // 'Sponsors',
+            ],
+            'Content'   => [
+                '360_package_spin_rotate' => 'Website\\Content\\Product',      // Needs some custom field handling for the 3D display
+                'apps'  => 'Website\\Content\\Product',                        // Custom field handling
+                'around_the_world'  => 'Website\\Content\\Article',            // Around the world section/blog
+
+                'article' => 'Website\\Content\\Article',                      // Make all Articles by default
+                // Sub types! @todo remap type based on sub type taxonomy
+                // 'article__news' => 'Website\\Content\\News',                // Custom sub type mappings
+                // 'article__perspective'  => 'Website\\Content\\Blog',
+                // 'article__column'  => 'Website\\Content\\Blog',
+
+                'page'  => 'Website\\Content\\Page',
+                'blog'  => 'Website\\Content\\Blog',
+                'company' => 'Website\\Content\\Company',
+                'download'  => 'Website\\Content\\Document',
+                // 'form_template'
+                // 'leadership_data_card'                                       // Additional information about companies, unsure where used.
+                // 'leadership_online_profile'                                  // More info,
+                // 'leadership_print_profile'                                   // More info, print revision??
+                'mini_bant' => 'Website\\Content\\TextAd',                      // Sponsored content, gated video/whitepaper landing page
+                // 'mobile_webform'
+                // 'opt_out_form'
+                'playbook'  => 'Website\\Content\\Document',                    // May necessitate a custom content type, but a gated landing page for a PDF download
+                'podcast' => 'Website\\Content\\Podcast',
+                // 'pop_up_registration'                                        // Popup ad form pushing to omeda sub
+                'registration_form' => 'Website\\Content\\Document',            // Majority appear to be PDF gates (some weird ones like ENL signups)
+                'stage_one_form'  => 'Website\\Content\\TextAd',                // Landing pages/promo blurbs pushing to registration_forms
+                'video' => 'Website\\Content\\Video',
+                'webform' => 'Website\\Content\\TextAd',                        // Same as stage_one_form
+                'webinar' => 'Website\\Content\\Webinar',                       // All old, currently unpublished
+                'webinar_registration'  => 'Website\\Content\\Webinar',         // Current webinar landing form
+                // 'webinar_series'
+                'week_in_review'  => 'Website\\Content\\News',                  // News/sponsored review, "Beyond the Factory Walls" primary section??
+                'whitepaper'  => 'Website\\Content\\Whitepaper',
+            ],
+            'Section'   => [
+                // 'page' => 'Website\\Section',
+                // 'page2' => 'Website\\Section',
+            ],
+            'Issue'     => [
+                'magazine_covers' => 'Magazine\\Issue',                         // magazine cover image, digital edition url
+            ],
+            'database'          => 'drupal_pmmi_aw',
+            'structure' =>  [
+                'stripFields'   => [
+                    // 'vid',
+                    // 'log',
+                    // 'tnid',
+                    // 'cid', // comment id - prob not needed but search data to confirm
+                    // 'translate',
+                    // 'print_html_display',
+                    // 'print_html_display_comment',
+                    // 'print_html_display_urllist',
+                    // 'last_comment_uid',
+                    // 'last_comment_name',
+                    // 'last_comment_timestamp',
+                    // 'revision_timestamp', // looks to be same as 'changed' which we are using
+                    // 'language' // use for determining path to text content, need to keep?
+                    //'comment','promote, 'sticky','premium_content','comment_count','picture','data'  // other fields I see but leaving for now
+                    //'moderate','format','feed','field_priority','field_leagcy_id','rdf_mapping','metatags','field_legacy_article_id');  // fields in old code, but not seen so far in hci
+                ],
+                '_id'       => 'nid',
+                'name'      => 'title',
+                'status'    => 'status',
+                // 'createdBy' => 'uid',
+                // 'updatedBy' => 'revision_uid',  // was using uid for both but I changed - ok, or less reliable?  @jpdev
+                // 'created'   => 'created',
+                // 'updated'   => 'changed',
+                // 'published' => 'changed',
+                // 'mutations' => 'path',
+                // 'body'      => 'body.und.0.value',
+                // 'teaser'    => 'field_teaser.und.0.value',
+                // 'authors'   => 'field_byline.und.0.value',
+                // 'deck'      => 'field_deck.und.0.value',
+                // 'images'    => ['field_image.und', 'field_sponsor_logo.und'],
+                // // existing fields (used mainly by top100)
+                // 'phone'     => 'field_phone.und.0.value',
+                // 'city'      => 'field_hci100_location.und.0.value',
+                // 'website'   => 'field_website.und.0.value',
+                // 'socialLinks'       => ['field_twitter.und.0.value', '	field_linkedin.und.0.value', 'field_facebook.und.0.value'],
+                // //'taxonomy'  => 'taxonomy',  // moving taxonomy refs in to legacy.refs from the outset, so not needed here (unless I move convertTaxonomy code into the convertFields method, which might be good)
+                // // these are for the new top100 content type
+                // 'rank'              => 'field_hci100_rank.und.0.value',
+                // 'previousRank'      => 'field_hci100_previous_rank.und.0.value',
+                // 'founded'           => 'field_hci100_founded.und.0.value',
+                // 'companyType'       => 'field_hci100_company_type.und.0.value',
+                // 'employees'         => 'field_hci100_employees.und.0.value',
+                // 'revenueCurrent'    => 'field_hci100_revenue_current.und.0.value',
+                // 'revenuePrior1'     => 'field_hci100_revenue_prior1.und.0.value',
+                // 'revenuePriorYear1' => 'field_hci100_revenue_prior1_yyyy.und.0.value',
+                // 'revenuePrior2'     => 'field_hci100_revenue_prior2.und.0.value',
+                // 'revenuePriorYear2' => 'field_hci100_revenue_prior2_yyyy.und.0.value',
+                // 'companyExecutives' => 'field_hci100_company_executives.und.0.value',
+                // 'majorRevenue'      => 'field_hci100_major_revenue.und.0.value',
+                // 'productCategories' => 'field_hci100_product_categories.und.0.value',
+                // 'marketsServing'    => 'field_hci100_markets_serving.und.0.value',
+                // 'linkUrl'           => 'function_getRedirects',
+            ]
+        ],
         'hci'       => [
             'Taxonomy'  => [
                 'Policy & Payment'                      => 'Taxonomy\\Category',
@@ -72,7 +200,7 @@ class ExportD7HCI extends Export
             'Section'   => [
                 'page' => 'Website\\Section',
                 'page2' => 'Website\\Section',
-                'panel' => 'Website\\Section',  
+                'panel' => 'Website\\Section',
             ],
             'Issue'     => [
                 'magazine_issue'         => 'Magazine\\Issue',
@@ -135,7 +263,7 @@ class ExportD7HCI extends Export
             ]
         ]
     ];
-    
+
     // strip fields so they do not show as unsupported, once identified as useless
     protected function removeCrapFields(&$node)
     {
@@ -143,9 +271,9 @@ class ExportD7HCI extends Export
             unset($node->$removeField);
         }
     }
-    
+
     // get drupal field names from base4 names via config map
-    public function getFieldMapName($baseName) 
+    public function getFieldMapName($baseName)
     {
         $sourceField = null;
         if (empty($this->map['structure'][$baseName])) {
@@ -171,6 +299,7 @@ class ExportD7HCI extends Export
 
                 default:
                     $object = node_load($row->nid);
+                    unset($object->rdf_mapping);
                     break;
             }
             if (is_object($object)) {
@@ -218,11 +347,11 @@ class ExportD7HCI extends Export
         $inQuery = implode(',', array_fill(0, count($types), '?'));
         $query = 'SELECT nid, type from {node} where type in ('.$inQuery.') ORDER BY nid desc';
         if (0 == $limit && $skip == 0) {
-            $resource = db_query($query, $types); 
+            $resource = db_query($query, $types);
         } else {
-            $resource = db_query_range($query, $skip, $limit, $types); 
+            $resource = db_query_range($query, $skip, $limit, $types);
         }
-        
+
         $nodes = $this->getObjects($resource, 'node');
         // $this->writeln(sprintf('DEBUG: `%s` with `%s` returned %s results.', $query, $types, count($nodes)));
         return $nodes;
@@ -230,11 +359,11 @@ class ExportD7HCI extends Export
 
     /**
      * {@inheritdoc}
-     * 
+     *
      * Many drupal values follow format of being field.$language.0.value
      * und is default language, this method basically returns the value through that chaff
      * Not consistently used, but probalby should be revised to do so
-     * 
+     *
      */
     protected function getFieldValue($field, $node, $return = null)
     {
@@ -249,12 +378,12 @@ class ExportD7HCI extends Export
         }
         return $field;
     }
-    
+
     /**
      * {@inheritdoc}
-     * 
+     *
      * path to multidimentional array using dot notation in config
-     * 
+     *
      */
     public function resolveDotNotation(array $a, $path, $default = null) {
         $current = $a;
@@ -268,12 +397,12 @@ class ExportD7HCI extends Export
         }
     return $current;
     }
-    
+
     /**
      * {@inheritdoc}
-     * 
+     *
      * Tiered fallback for content where multiple fields can go to one base field, but there is an order of preference
-     * 
+     *
      */
     public function cascadeValue($doc, $cascadeSequence, $fallbackValue = null) {
         foreach ($cascadeSequence AS $cascadeElement) {
@@ -285,10 +414,10 @@ class ExportD7HCI extends Export
 
     /**
      * {@inheritdoc}
-     * 
-     * First logic block generally takes care of everything.  
+     *
+     * First logic block generally takes care of everything.
      * Rest is artifact of earlier code, generally special fields specific to prior sites that are no vocabulary/taxonomy in drupal, but we want to treat them as such in base
-     * 
+     *
      */
     protected function convertTaxonomy(&$node)
     {
@@ -302,7 +431,7 @@ class ExportD7HCI extends Export
             }
             unset($node->$vocabularyField);
         }
-        
+
         if (isset($node->field_tags)) {
             $terms = $this->getFieldValue($node->field_tags, $node, []);
             foreach ($terms as $tax) {
@@ -341,15 +470,15 @@ class ExportD7HCI extends Export
             $legacySource = sprintf('%s_taxonomy', $this->getKey());
             $node->legacy['refs']['taxonomy'][$legacySource] = $taxonomy;
         }
-        
+
     }
-    
+
     /**
      * {@inheritdoc}
-     * 
+     *
      * Gets node fields which refer to taxonomy entries
      * Probably a cleaner way to do this, drupal default uses machine_name by default, but users can override, so not 100% reliable
-     * 
+     *
      */
     public function getTaxonomyFields() {
         if (null == $this->taxonomyFields) {
@@ -358,21 +487,21 @@ class ExportD7HCI extends Export
                 // @jpdev - not sure if there is a better way to determine field names, but so far they follow one of either of these formats
                 $this->taxonomyFields[] = sprintf('taxonomy_%s', $vocab->machine_name);
                 $this->taxonomyFields[] = sprintf('field_%s', $vocab->machine_name);
-                
-                // @jpdev - super hack for hci - no idea why the field does not follow the usual convention 
+
+                // @jpdev - super hack for hci - no idea why the field does not follow the usual convention
                 $this->taxonomyFields[] = 'field_pop_health_data_analytics';  // machine name is population_health_data_analytics not pop_health_data_analytics which is added by logic above
             }
         }
-        
+
         return $this->taxonomyFields;
     }
 
     /**
      * {@inheritdoc}
-     * 
+     *
      * Looks up taxonomy by tid in drupal so it can determine its type and thus where its mapped to in base via config
      * Not used for HCI (because said fields did not exist) but can see need in future
-     * 
+     *
      */
     protected function addTerm(&$taxonomy, $tid)
     {
@@ -398,7 +527,7 @@ class ExportD7HCI extends Export
         $nodeArray = json_decode(json_encode($node, 512), true);
 
         $node->type = str_replace('Website\\Content\\', '', $this->map['Content'][$node->type]);
-        
+
         // method for each base4 element
         // _id
         $fieldName = $this->getFieldMapName('_id');
@@ -411,45 +540,45 @@ class ExportD7HCI extends Export
         if (!empty($fieldName)) {
             $node->name = $node->$fieldName;
         }
-        
+
         // status
         $fieldName = $this->getFieldMapName('status');
         if (!empty($fieldName)) {
             $node->status = (int) $node->$fieldName;
         }
-        
+
         // createdBy
         $fieldName = $this->getFieldMapName('createdBy');
         if (!empty($fieldName)) {
             $legacySource = sprintf('%s_user', $this->getKey());
             $node->legacy['refs']['createdBy'][$legacySource] = $node->$fieldName;
         }
-        
+
         // updatedBy
         $fieldName = $this->getFieldMapName('updatedBy');
         if (!empty($fieldName)) {
             $legacySource = sprintf('%s_user', $this->getKey());
             $node->legacy['refs']['updatedBy'][$legacySource] = $node->$fieldName;
         }
-        
+
         // created
         $fieldName = $this->getFieldMapName('created');
         if (!empty($fieldName)) {
             $node->created = (int) $node->$fieldName;
         }
-        
+
         // updated
         $fieldName = $this->getFieldMapName('updated');
         if (!empty($fieldName)) {
             $node->updated = (int) $node->$fieldName;
         }
-        
+
         // published
         $fieldName = $this->getFieldMapName('published');
         if (!empty($fieldName)) {
             $node->published = (int) $node->$fieldName;
         }
-        
+
         // redirects
         $node->mutations = [];
         $node->mutations['Website']['redirects'][] = drupal_get_path_alias(sprintf('node/%s', $node->_id));
@@ -458,7 +587,7 @@ class ExportD7HCI extends Export
         if (!empty($fieldName) && !empty($node->$fieldName)) {
             $node->mutations['Website']['redirects'][] = $node->$fieldName;
         }
-        
+
         // body
         $fieldName = $this->getFieldMapName('body');
         if (!empty($fieldName)) {
@@ -470,7 +599,7 @@ class ExportD7HCI extends Export
                 $node->body = null;
             }
         }
-        
+
         // teaser
         $fieldName = $this->getFieldMapName('teaser');
         if (!empty($fieldName)) {
@@ -479,7 +608,7 @@ class ExportD7HCI extends Export
                 $node->teaser = $teaser;
             }
         }
-        
+
         // authors
         $fieldName = $this->getFieldMapName('authors');
         if (!empty($fieldName)) {
@@ -490,7 +619,7 @@ class ExportD7HCI extends Export
                     // @jpdev - they have name, title (David Raths, Contributing Editor) - should I attempt to parse, or leave verbatium?
                     $name = trim($author);
                     $contact = [
-                        'name'  => $name,    
+                        'name'  => $name,
                     ];
 
                     // need to set first/last name on contacts, calculated field will change name to blank if they are not set
@@ -509,8 +638,8 @@ class ExportD7HCI extends Export
                 }
             }
         }
-        
-        // deck 
+
+        // deck
         // @jpdev - put in root, or in mutations.Magazine
         $fieldName = $this->getFieldMapName('deck');
         if (!empty($fieldName)) {
@@ -520,7 +649,7 @@ class ExportD7HCI extends Export
                 $node->mutations['Magazine']['deck']= $teaser;
             }
         }
-        
+
         // modified to work on array of image fields
         $fieldNames = $this->getFieldMapName('images');
         if (!empty($fieldNames)) {
@@ -533,12 +662,12 @@ class ExportD7HCI extends Export
                     foreach ($images AS $image) {
                         if ($debug) var_dump($image);
                         if (0 === (int) $image['fid']) continue;
-                        
+
                         $fp = file_create_url($image['uri']);
                         if ($debug) var_dump('found images');
                         if ($debug) var_dump($fp);
                         $node->legacy['refs']['images']['common'][] = $fp;
-                        
+
                         // add image also
                         $caption = null;
                         if (isset($node->field_image_caption)) {
@@ -554,7 +683,7 @@ class ExportD7HCI extends Export
                             }
                         }
                         $this->createImage($image, $caption);
-    
+
                         if (!isset($node->primaryImage)) {
                             //$node->legacy['refs']['primaryImage']['common'] = (String) $image['fid'];
                             $node->legacy['refs']['primaryImage']['common'] = (String) $fp;
@@ -563,7 +692,7 @@ class ExportD7HCI extends Export
                 }
             }
         }
-        
+
         // added for webinars
         //$fieldName = $this->getFieldMapName('linkUrl');
         $redirectSource = sprintf('node/%s', $nodeArray['nid']);
@@ -573,7 +702,7 @@ class ExportD7HCI extends Export
             $node->linkUrl = $redirectRow->redirect;
             $node->linkText = 'Register / View';
         }
-         
+
         // added for hci100
         $fieldName = $this->getFieldMapName('phone');
         if (!empty($fieldName)) {
@@ -597,7 +726,7 @@ class ExportD7HCI extends Export
                 }
             }
         }
-        
+
         $fieldName = $this->getFieldMapName('website');
         if (!empty($fieldName)) {
             $website = $this->resolveDotNotation($nodeArray, $fieldName);
@@ -605,16 +734,16 @@ class ExportD7HCI extends Export
                 $node->website = $website;
             }
         }
-        
+
         // socialLinks returning array
         $fieldNameArray = $this->getFieldMapName('socialLinks');
         if (!empty($fieldName)) {
             $socialLinks = array();
             foreach ($fieldNameArray AS $fieldName) {
                 $socialData = $this->resolveDotNotation($nodeArray, $fieldName);
-                
+
                 if (empty($socialData)) continue;
-                
+
                 if (strpos($fieldName, 'twitter') !== false) {
                     $data = [
                         'provider'  => 'twitter',
@@ -644,7 +773,7 @@ class ExportD7HCI extends Export
                 $node->socialLinks = $socialLinks;
             }
         }
-        
+
         $fieldName = $this->getFieldMapName('rank');
         if (!empty($fieldName)) {
             $rank = $this->resolveDotNotation($nodeArray, $fieldName);
@@ -652,7 +781,7 @@ class ExportD7HCI extends Export
                 $node->rank = (int) $rank;
             }
         }
-        
+
         $fieldName = $this->getFieldMapName('previousRank');
         if (!empty($fieldName)) {
             $previousRank = $this->resolveDotNotation($nodeArray, $fieldName);
@@ -660,7 +789,7 @@ class ExportD7HCI extends Export
                 $node->previousRank = (int) $previousRank;
             }
         }
-        
+
         $fieldName = $this->getFieldMapName('founded');
         if (!empty($fieldName)) {
             $founded = $this->resolveDotNotation($nodeArray, $fieldName);
@@ -668,7 +797,7 @@ class ExportD7HCI extends Export
                 $node->founded = $founded;
             }
         }
-        
+
         $fieldName = $this->getFieldMapName('companyType');
         if (!empty($fieldName)) {
             $companyType = $this->resolveDotNotation($nodeArray, $fieldName);
@@ -676,7 +805,7 @@ class ExportD7HCI extends Export
                 $node->companyType = $companyType;
             }
         }
-        
+
         $fieldName = $this->getFieldMapName('employees');
         if (!empty($fieldName)) {
             $employees = $this->resolveDotNotation($nodeArray, $fieldName);
@@ -684,7 +813,7 @@ class ExportD7HCI extends Export
                 $node->employees = $employees;
             }
         }
-        
+
         $fieldName = $this->getFieldMapName('revenueCurrent');
         if (!empty($fieldName)) {
             $revenueCurrent = $this->resolveDotNotation($nodeArray, $fieldName);
@@ -692,8 +821,8 @@ class ExportD7HCI extends Export
                 $node->revenueCurrent = $revenueCurrent;
             }
         }
-        
-        
+
+
         $fieldName = $this->getFieldMapName('revenuePrior1');
         if (!empty($fieldName)) {
             $revenuePrior1 = $this->resolveDotNotation($nodeArray, $fieldName);
@@ -701,7 +830,7 @@ class ExportD7HCI extends Export
                 $node->revenuePrior1 = $revenuePrior1;
             }
         }
-        
+
         $fieldName = $this->getFieldMapName('revenuePriorYear1');
         if (!empty($fieldName)) {
             $revenuePriorYear1 = $this->resolveDotNotation($nodeArray, $fieldName);
@@ -709,7 +838,7 @@ class ExportD7HCI extends Export
                 $node->revenuePriorYear1 = $revenuePriorYear1;
             }
         }
-        
+
         $fieldName = $this->getFieldMapName('revenuePrior2');
         if (!empty($fieldName)) {
             $revenuePrior2 = $this->resolveDotNotation($nodeArray, $fieldName);
@@ -717,7 +846,7 @@ class ExportD7HCI extends Export
                 $node->revenuePrior2 = $revenuePrior2;
             }
         }
-        
+
         $fieldName = $this->getFieldMapName('revenuePriorYear2');
         if (!empty($fieldName)) {
             $revenuePriorYear2 = $this->resolveDotNotation($nodeArray, $fieldName);
@@ -725,7 +854,7 @@ class ExportD7HCI extends Export
                 $node->revenuePriorYear2 = $revenuePriorYear2;
             }
         }
-        
+
         $fieldName = $this->getFieldMapName('companyExecutives');
         if (!empty($fieldName)) {
             $companyExecutives = $this->resolveDotNotation($nodeArray, $fieldName);
@@ -733,7 +862,7 @@ class ExportD7HCI extends Export
                 $node->companyExecutives = $companyExecutives;
             }
         }
-        
+
         $fieldName = $this->getFieldMapName('majorRevenue');
         if (!empty($fieldName)) {
             $majorRevenue = $this->resolveDotNotation($nodeArray, $fieldName);
@@ -741,7 +870,7 @@ class ExportD7HCI extends Export
                 $node->majorRevenue = $majorRevenue;
             }
         }
-        
+
         $fieldName = $this->getFieldMapName('productCategories');
         if (!empty($fieldName)) {
             $productCategories = $this->resolveDotNotation($nodeArray, $fieldName);
@@ -749,7 +878,7 @@ class ExportD7HCI extends Export
                 $node->productCategories = $productCategories;
             }
         }
-        
+
         $fieldName = $this->getFieldMapName('marketsServing');
         if (!empty($fieldName)) {
             $marketsServing = $this->resolveDotNotation($nodeArray, $fieldName);
@@ -759,11 +888,11 @@ class ExportD7HCI extends Export
         }
 
         $oldFields = ['field_image_caption']; // caption used with field_image
-        $newFields = ['_id', 'type', 'legacy', ];  
+        $newFields = ['_id', 'type', 'legacy', ];
         foreach ($this->map['structure'] AS $baseFieldName => $drupalFieldNames) {
             $newFields[] = $baseFieldName;
             if (!is_array($drupalFieldNames)) $drupalFieldNames = (array)$drupalFieldNames;
-            
+
             // dot notation drupal fields will remove fromt the root element (body.value will remove body and all children unless body is in the newField list as well)
             foreach ($drupalFieldNames AS &$drupalFieldName) {
                 $drupalFieldName = explode('.', $drupalFieldName)[0];
@@ -775,10 +904,10 @@ class ExportD7HCI extends Export
             unset($node->$removeField);
         }
         $nodeFields = array_keys($nodeArray);
-        
+
         // don't move fields that are in the newField (B4) list
         $moveFields = array_diff($nodeFields, $newFields);
-        
+
         // don't move fields that were sources from the oldField (D7) list
         $moveFields = array_diff($moveFields, $oldFields);
 
@@ -790,15 +919,15 @@ class ExportD7HCI extends Export
 
     }
 
-    
+
 
     /**
      * {@inheritdoc}
-     * 
+     *
      * Creates an image to create as Asset in base4
-     * 
+     *
      */
-    protected function createImage(array $img, $caption = null)
+    protected function createImage($img, $caption = null)
     {
         if ((int) $img['fid'] === 0) {
             return;
@@ -829,16 +958,16 @@ class ExportD7HCI extends Export
         try {
             $collection->insert($kv);
         } catch (\Exception $e) {
-            var_dump('some error - dupe fid?');  
+            var_dump('some error - dupe fid?');
             var_dump($kv);
         }
     }
-    
+
     /**
      * {@inheritdoc}
-     * 
+     *
      * Creates an image to create as Asset in base4
-     * 
+     *
      */
     protected function importTaxonomy($vocab)
     {
@@ -846,6 +975,7 @@ class ExportD7HCI extends Export
         $terms = taxonomy_get_tree($vocab->vid);
         $type = str_replace('Taxonomy\\', '', $this->map['Taxonomy'][$vocab->name]);
         $formatted = [];
+        var_dump($terms);
         foreach ($terms as $term) {
             if ((int) $term->tid === 0) {
                 continue;
@@ -855,32 +985,37 @@ class ExportD7HCI extends Export
             if (false !== $path = drupal_lookup_path('alias', $alias)) {
                 $alias = $path;
             }
-            
+
             $formatted[] = [
                 '_id'           => (int) $term->tid,
                 //'name'          => $term->name,
-                'name'          => sprintf('%s -- %s', $vocab->name, $term->name),
+                'name'          => $type === 'Bin' ? sprintf('%s: %s', $vocab->name, $term->name) : $term->name,
                 'description'   => $term->description,
                 'type'          => $type,
                 'alias'         => $alias,
                 'legacy'        => [
                     'id'            => (String) $term->tid,
-                    'source'        => sprintf('%s_taxonomy', $this->getKey())
+                    'source'        => sprintf('%s_taxonomy_%s', $this->getKey(), $vocab->machine_name)
                 ]
             ];
+            if ((int) $term->tid === 1345) {
+                var_dump($formatted[count($formatted) - 1]);
+            }
         }
 
         if (!empty($formatted)) {
             $this->writeln(sprintf('Vocabulary: Inserting %s %s terms.', count($formatted), $type));
-            $collection->batchInsert($formatted);
+            return method_exists($collection, 'batchInsert')
+                ? $collection->batchInsert($formatted)
+                : $collection->insertMany($formatted);
         }
     }
-    
+
     /**
      * {@inheritdoc}
-     * 
+     *
      * Creates an image to create as Asset in base4
-     * 
+     *
      */
     protected function importContact($contact) {
         $collection = $this->database->selectCollection('Content');
@@ -893,15 +1028,17 @@ class ExportD7HCI extends Export
             ]
         ];
         if (!empty($formatted)) {
-            $collection->batchInsert($formatted);
+            return method_exists($collection, 'batchInsert')
+                ? $collection->batchInsert($formatted)
+                : $collection->insertMany($formatted);
         }
     }
-    
+
     /**
      * {@inheritdoc}
-     * 
+     *
      * Create Issue elements to migrate to base4 Magazine/Issue entries
-     * 
+     *
      */
     protected function importMagazineIssueNodes()
     {
@@ -931,42 +1068,42 @@ class ExportD7HCI extends Export
                 'updated'           => $node->changed,
                 'status'            => (int) $node->status,
             ];
-            
+
             if (!empty($node->body)) $kv['description'] = $node->body;
-            
+
             $kv['legacy']['id'] = (string) $node->nid;
             $kv['legacy']['source'] = sprintf('%s_issue', $this->getKey());
-            
+
             //$nodeArray = json_decode(json_encode($node, 512), true);
             $kv['legacy']['raw'] = $node;
-            
+
             // mailDate not defined in drupal, titles are often close enough to calculate, so try, fallback to Jan 2000 if all fails
             $mailDate = strtotime($node->title);
             if ($mailDate === false) {
                 // mailDate was not cleanly formatted, perform usual adjustments to try to determine mailDate
-                
+
                 // trim it up
                 $title = trim($node->title);
-                
+
                 // First/Second/Third/Fouth Quarter
                 $title = str_replace('First Quarter', 'January', $title);
                 $title = str_replace('Second Quarter', 'April', $title);
                 $title = str_replace('Third Quarter', 'July', $title);
                 $title = str_replace('Fourth Quarter', 'October', $title);
-                
+
                 // strip 'Digital Suppliment'
                 $title = str_replace(' Digital Supplement', '', $title);
-                
+
                 // April/May 2017
                 if (false !== strpos($title, '/')) {
                     $slashParts = explode("/", $title);
                     $spaceParts = explode(" ", $slashParts[1]);
                     $title = sprintf("%s %s", $slashParts[0], $spaceParts[1]);
                 }
-               
-                // try to do mailDate again 
+
+                // try to do mailDate again
                 $mailDate = strtotime($title);
-                
+
                 // if still bad, leave blank if set to ignore, otherwise use Jan 2000
                 if ($mailDate === false) {
                     //$ignore = ['Online', 'HRCM 2007'];
@@ -980,22 +1117,22 @@ class ExportD7HCI extends Export
                 }
             }
             $mailDate = new DateTime(date('c', $mailDate), $tz);
-            
+
             if (false !== $mailDate) $kv['mailDate'] = $mailDate->format('c');
-   
+
             // coverImage
             if (!empty($node->field_image)) {
                 $imageData = $node->field_image['und'][0];
-                
+
                 // create Image for later reference resolution
                 $this->createImage($imageData);
-                
+
                 // set ref on issue as well
                 $imageUrl = file_create_url($imageData['uri']);
                 $kv['legacy']['refs']['coverImage']['common'] = $imageUrl;
             }
             if (false !== $mailDate) $kv['legacy']['shortName'] = strtolower($mailDate->format('My'));
-            
+
             // @jpdev - Not sure if we can count on this always existing, use this or ScheduleMagaizne drush collection to do magaizne scheduling
             // atm base4 set to use both legacy.schedule.print on issue AND legacy.schedule.print.issue on articles to schedule
             if (!empty($node->field_noderef_article)) {
@@ -1013,7 +1150,7 @@ class ExportD7HCI extends Export
                     $kv['digitalEditionUrl'] = rtrim($link['value']);
                 }
             }
-            
+
             if (isset($node->field_issue_link)) {
                 foreach ($node->field_issue_link as $link) {
                     if (array_key_exists('value', $link) && null === $link['value']) {
@@ -1028,16 +1165,18 @@ class ExportD7HCI extends Export
 
         if (!empty($formatted)) {
             $this->writeln(sprintf('Nodes: Inserting %s Magazine Issues.', count($formatted)));
-            $collection->batchInsert($formatted);
+            return method_exists($collection, 'batchInsert')
+                ? $collection->batchInsert($formatted)
+                : $collection->insertMany($formatted);
         }
-        
+
     }
-    
+
     /**
      * {@inheritdoc}
-     * 
+     *
      * The other end of magaizne scheduling (node->issue), Issue import storing the reverse (issue->node) - not same data, using both
-     * 
+     *
      */
     protected function convertScheduling(&$node)
     {
@@ -1047,7 +1186,7 @@ class ExportD7HCI extends Export
             $issueNid = $issue['und'][0]['nid'];
             if (!empty($issueNid)) {
                 $issue = node_load($issueNid);
-                
+
                 // original code stored to its own collection, atm I'm storing in legacy.refs.schedule straight away
                 $node->legacy['schedule']['print']['issue'][] = (string) $issue->nid;
                 $this->addMagazineSchedule($node, $issue);
@@ -1055,12 +1194,12 @@ class ExportD7HCI extends Export
         }
         unset($node->field_issue);
     }
-    
+
     /**
      * {@inheritdoc}
-     * 
+     *
      * Don't use this collection at all anymore, leaving for now but no used by base4 end
-     * 
+     *
      */
     protected function addMagazineSchedule($node, $issue)
     {
@@ -1075,5 +1214,5 @@ class ExportD7HCI extends Export
         ];
         $collection->insert($kv);
     }
-    
+
 }

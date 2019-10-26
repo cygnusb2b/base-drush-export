@@ -1,40 +1,50 @@
 <?php
-require_once 'phar://export.phar/Cygnus/DrushExport/AbstractExport.php';
-require_once 'phar://export.phar/Cygnus/DrushExport/ExportD6.php';
-require_once 'phar://export.phar/Cygnus/DrushExport/ExportNVP.php';
-require_once 'phar://export.phar/Cygnus/DrushExport/ExportD7.php';
-require_once 'phar://export.phar/Cygnus/DrushExport/ExportD7HCI.php';
+require_once 'phar://export.phar/vendor/autoload.php';
+// require_once 'phar://export.phar/src/Cygnus/DrushExport/AbstractExport.php';
+// require_once 'phar://export.phar/src/Cygnus/DrushExport/ExportD6.php';
+// require_once 'phar://export.phar/src/Cygnus/DrushExport/ExportNVP.php';
+// require_once 'phar://export.phar/src/Cygnus/DrushExport/ExportD7.php';
+// require_once 'phar://export.phar/src/Cygnus/DrushExport/ExportD75.php';
 
-define('DRUPAL_VERSION', drush_core_status('drupal-version')['drupal-version']);
+define('DRUPAL_VERSION', function_exists('drush_core_status') ? drush_core_status('drupal-version')['drupal-version'] : null);
 
 $class = 'Cygnus\\DrushExport\\ExportD6';
 if (version_compare(DRUPAL_VERSION, '7.0') >= 0) {
-    $class = 'Cygnus\\DrushExport\\ExportD7';
+    if (version_compare(DRUPAL_VERSION, '7.5') >= 0) {
+        $class = 'Cygnus\\DrushExport\\ExportD75';
+    } else {
+        $class = 'Cygnus\\DrushExport\\ExportD7';
+    }
 }
 
 ini_set('memory_limit', -1);
 set_time_limit(0);
 
-global $argv;
+$dsn = getenv('MONGO_DSN');
+$key = getenv('KEY');
 
-if (!isset($argv[5])) {
-    echo "\r\n\r\nERROR! You MUST specify a MongoDB server as an argument.\r\n\r\n";
+if (!$dsn) {
+    echo "\r\n\r\nERROR! You MUST specify the MongoDB server using the `MONGO_DSN` environment variable.\r\n\r\n";
     exit(1);
 }
-$dsn = sprintf('mongodb://%s', $argv[5]);
 
-if (!isset($argv[6])) {
-    echo "\r\n\r\nERROR! You MUST specify a valid configuration key as an argument.\r\n\r\n";
+if (!$key) {
+    echo "\r\n\r\nERROR! You MUST specify a valid configuration key using the `KEY` environment variable.\r\n\r\n";
     exit(1);
 }
-$key = $argv[6];
-if ('nashvillepost' == $key) {
-    $class = 'cygnus\\DrushExport\\ExportNVP';
-}
-if ('hci' == $key) {
-    $class = 'Cygnus\\DrushExport\\ExportD7HCI';
-}
+$dsn = false === stristr($dsn, 'mongodb://') ? sprintf('mongodb://%s', $dsn) : $dsn;
 
+if ('nashvillepost' == $key) $class = 'Cygnus\\DrushExport\\ExportNVP';
+if ('aw' == $key) $class = 'Cygnus\DrushExport\PMMI\AW';
+if ('hp' == $key) $class = 'Cygnus\DrushExport\PMMI\HP';
+if ('oem' == $key) $class = 'Cygnus\DrushExport\PMMI\OEM';
+if ('pw' == $key) $class = 'Cygnus\DrushExport\PMMI\PW';
+if ('pfw' == $key) $class = 'Cygnus\DrushExport\PMMI\PFW';
+if ('id' == $key) $class = 'Cygnus\DrushExport\PMMI\ID';
+if ('mnet' == $key) $class = 'Cygnus\DrushExport\PMMI\MNET';
+if ('lsl' == $key) $class = 'Cygnus\DrushExport\PMMI\LSL';
+if ('sc' == $key) $class = 'Cygnus\DrushExport\PMMI\SC';
+// if ('gp' == $key) $class = 'Cygnus\DrushExport\PMMI\GP'; // drupal 6 :|
 
 $export = new $class($key, $dsn);
 $export->execute();

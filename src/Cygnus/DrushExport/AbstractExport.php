@@ -5,12 +5,14 @@ namespace Cygnus\DrushExport;
 use InvalidArgumentException;
 use DateTimeZone;
 use DateTime;
+use Symfony\Component\Console\Output\ConsoleOutput;
 
 /**
  * Wrapper for core logic in Drupal imports
  */
-abstract class Export
+abstract class AbstractExport
 {
+    use Traits\IO;
 
     // @jp - tmp to debug a specific node on new data sets
     public $debugNode = false;
@@ -59,10 +61,11 @@ abstract class Export
             throw new InvalidArgumentException(sprintf('Invalid config key specified. Valid keys: `%s`.', implode(',', array_keys($this->configs))));
         }
         $this->map = $this->configs[$this->key];
-        $this->mongo = new \MongoClient($dsn);
-        $db = $this->mongo->selectDb($this->map['database']);
-        $db->drop();
-        $this->database = $this->mongo->selectDb($this->map['database']);
+
+        $this->dbal = new DBAL($dsn);
+        $this->database = $this->map['database'];
+
+        $this->output = new ConsoleOutput();
     }
 
     /**
@@ -70,15 +73,15 @@ abstract class Export
      */
     public function execute()
     {
-        $this->writeln(sprintf('Starting import for %s', $this->key), true, true);
+        $this->writeln(sprintf('Starting import for %s', $this->key));
 
-        $this->importUsers();
+        // $this->importUsers();
         $this->importTaxonomies();
         $this->importNodes();
 
         $this->writeln('Import complete.', true, true);
     }
-    
+
     /**
      * Used to set legacySource for some imports
      */
@@ -87,61 +90,46 @@ abstract class Export
     }
 
     /**
-     * Handles output sanitization.
-     *
-     * @final
-     * @access protected
-     *
-     * @param string $text The text to output
-     * @param boolean $breakAfter Add a linebreak after the text
-     * @param boolean $breakBefore Add a linebreak before the text
-     */
-    final protected function writeln($text, $breakAfter = false, $breakBefore = false)
-    {
-        // Enforce a line break on all lines.
-        $text = sprintf("%s\r\n", $text);
-
-        if (true === $breakAfter) {
-            $text = sprintf("%s\r\n", $text);
-        }
-
-        if (true == $breakBefore) {
-            $text = sprintf("\r\n%s", $text);
-        }
-        echo $text;
-    }
-
-    /**
      * Iterates over users and exports them.
      */
     protected function importUsers()
     {
-        $this->writeln('Importing Users.', false, true);
-        $users = $this->loadUsers();
+        $counter = function() {
+            $r = db_query('select count(uid) from {users}');
+            return (int) $r->fetchCol()[0];
+        };
 
-        $collection = $this->database->selectCollection('User');
-        $formatted = [];
-        foreach ($users as $user) {
-            if ((int) $user->uid === 0) {
-                continue;
-            }
-            $kv = [
-                '_id'       => (int) $user->uid,
-                'username'  => $user->name,
-                'password'  => $user->pass,
-                'email'     => $user->mail
+        $retriever = function($limit, $skip) {
+            $resource = db_query(sprintf('select uid from {users} order by uid asc limit %s, %s', $skip, $limit));
+            $users = $this->getObjects($resource, 'user');
+            return $users;
+        };
+
+        $modifier = function($user) {
+            $uid = (int) $user->uid;
+            if ($uid === 0) return;
+            return [
+                'filter'    => [ '_id' => $uid ],
+                'update'    => [
+                    '$set'  => [
+                        'username'  => $user->name,
+                        'email'     => $user->mail,
+                        'firstName' => $user->field_firstname['und'][0]['value'],
+                        'lastName'  => $user->field_lastname['und'][0]['value'],
+                        'legacy'    => [
+                            'id'        => (string) $uid,
+                            'source'    => 'aw_user',
+                        ],
+                    ]
+                ],
             ];
-            if (!empty(user->uid)) {
-                $kv['legacy']['id'] = (String) $user->uid
-                $kv['legacy']['source'] = sprintf('%s_user', $this->getKey())
-            }
-            $formatted[] = $kv;
-        }
-        
-        if (!empty($formatted)) {
-            $this->writeln(sprintf('Users: Inserting %s users.', count($formatted)));
-            $collection->batchInsert($formatted);
-        }
+        };
+
+        $persister = function($ops) {
+            $this->dbal->batchUpsert($this->database, 'User', $ops);
+        };
+
+        $this->loop($counter, $retriever, $modifier, $persister, 'User');
     }
 
     /**
@@ -150,8 +138,10 @@ abstract class Export
     protected function importTaxonomies()
     {
         $this->writeln('Importing Taxonomy.', false, true);
+        $this->indent();
+
         $taxonomies = taxonomy_get_vocabularies();
-        
+
         if (!isset($this->map['Taxonomy']) || empty($this->map['Taxonomy'])) {
             $this->writeln(sprintf('You must set the taxonomy map for %s:', $this->key), true, true);
 
@@ -159,7 +149,7 @@ abstract class Export
             foreach ($taxonomies as $taxonomy) {
                 $types[] = $taxonomy->name;
             }
-        
+
             $this->writeln(sprintf('Valid types: %s', implode(', ', $types)), true, true);
             die();
         }
@@ -168,9 +158,11 @@ abstract class Export
             if (isset($this->map['Taxonomy'][$vocab->name])) {
                 $this->importTaxonomy($vocab);
             } else {
-                $this->writeln(sprintf('Vocabulary: Skipped %s!', $vocab->name));
+                $this->writeln(sprintf('Vocabulary: Skipped %s!', $vocab->name), true, true);
             }
         }
+        $this->outdent();
+
     }
 
     /**
@@ -179,11 +171,13 @@ abstract class Export
     protected function importNodes()
     {
         $this->writeln('Importing Nodes.', false, true);
+        $this->indent();
 
         $this->importWebsiteSectionNodes();
         $this->importMagazineIssueNodes();
         $this->importContentNodes();
 
+        $this->outdent();
     }
 
     /**
@@ -263,7 +257,7 @@ abstract class Export
      * @param   array   $img        The image data
      * @param   string  $caption    The image caption, if available.
      */
-    abstract protected function createImage(array $img, $caption = null);
+    abstract protected function createImage($img, $caption = null);
 
     final protected function getHost()
     {
@@ -356,8 +350,9 @@ abstract class Export
 
     protected function addMagazineSchedule($node, $issue)
     {
-        
-        $collection = $this->database->selectCollection('ScheduleMagazine');
+        $collection = method_exists($this->database, 'selectCollection')
+            ? $this->database->selectCollection('ScheduleMagazine')
+            : $this->database->ScheduleMagazine;
         $type = (isset($this->map['Content'][$node->type])) ? $this->map['Content'][$node->type] : null;
         $type = str_replace('Website\\Content\\', '', $type);
         $kv = [
@@ -368,7 +363,10 @@ abstract class Export
             'issue'     => (int) $issue->nid,
             'section'   => null
         ];
-        $collection->insert($kv);
+
+        return method_exists($collection, 'insert')
+            ? $collection->insert($kv)
+            : $collection->insertOne($kv);
     }
 
     protected function convertFields(&$node)
@@ -578,7 +576,12 @@ abstract class Export
 
     protected function importTaxonomy($vocab)
     {
-        $collection = $this->database->selectCollection('Taxonomy');
+        // @todo update
+        throw new \BadMethodCallException('This method has not yet been rewritten.');
+
+        $collection = method_exists($this->database, 'selectCollection')
+            ? $this->database->selectCollection('Taxonomy')
+            : $this->database->Taxonomy;
         $terms = taxonomy_get_tree($vocab->vid);
         $type = str_replace('Taxonomy\\', '', $this->map['Taxonomy'][$vocab->name]);
         $formatted = [];
@@ -620,6 +623,9 @@ abstract class Export
 
     protected function importWebsiteSectionNodes()
     {
+        // @todo update
+        throw new \BadMethodCallException('This method has not yet been rewritten.');
+
         if (!isset($this->map['Section']) || empty($this->map['Section'])) {
             $this->writeln(sprintf('You must set the section map for %s:', $this->key), false, true);
             $types = $this->getTypes();
@@ -627,7 +633,9 @@ abstract class Export
             die();
         }
 
-        $collection = $this->database->selectCollection('Section');
+        $collection = method_exists($this->database, 'selectCollection')
+            ? $this->database->selectCollection('Section')
+            : $this->database->Section;
         $types = array_keys($this->map['Section']);
 
         $count = $total = (int) $this->countNodes($types);
@@ -659,7 +667,23 @@ abstract class Export
             die();
         }
 
-        $collection = $this->database->selectCollection('Issue');
+        $types = array_keys($this->map['Issue']);
+
+        foreach ($types as $type) {
+            $this->importMagazineIssueTypeNodes($type, $limit);
+        }
+
+        $this->outdent();
+    }
+
+    protected function importMagazineIssueTypeNodes($type, $limit = 200)
+    {
+        // @todo update
+        throw new \BadMethodCallException('This method has not yet been rewritten.');
+
+        $collection = method_exists($this->database, 'selectCollection')
+            ? $this->database->selectCollection('Issue')
+            : $this->database->Issue;
         $types = array_keys($this->map['Issue']);
 
         $count = $total = (int) $this->countNodes($types);
@@ -712,8 +736,11 @@ abstract class Export
         }
     }
 
-    protected function importContentNodes($limit = 100)
+    final protected function importContentNodes($limit = 200)
     {
+        $this->writeln('Importing Content Nodes.', false, true);
+        $this->indent();
+
         if (!isset($this->map['Content']) || empty($this->map['Content'])) {
             $this->writeln(sprintf('You must set the content map for %s:', $this->key), false, true);
             $types = $this->getTypes();
@@ -721,66 +748,45 @@ abstract class Export
             die();
         }
 
-        $collection = $this->database->selectCollection('Content');
         $types = array_keys($this->map['Content']);
 
-        $count = $total = (int) $this->countNodes($types);
-
-        $this->writeln(sprintf('Nodes: Importing %s documents.', $count));
-
-        $n = $inserted = 0;
-
-        while ($count >= 0) {
-            $skip = $limit * $n;
-            $nodes = $this->queryNodes($types, $limit, $skip);
-            $formatted = [];
-            foreach ($nodes as &$node) {
-                //$this->writeln(sprintf('Importing Node:: %s', $node->nid));
-                if ($node->nid == $this->debugNodeId) {
-                    $this->debugNode = true;
-                }
-                if ($this->debugNode) {
-                    $this->writeln('***********************************************************************************',true,true);
-                    var_dump($node);
-                }
-
-                if (0 === $node->nid) {
-                    continue;
-                }
-
-                if (null !== ($type = (isset($this->map['Content'][$node->type])) ? $this->map['Content'][$node->type] : null)) {
-                    $this->convertLegacy($node);
-                    $this->convertTaxonomy($node);
-                    $this->convertScheduling($node);
-                    $this->convertFields($node);
-                    $formatted[] = json_decode(json_encode($node, 512), true);
-                }
-            }
-
-            $inserted += count($formatted);
-            $percentage = ($total == 0) ? 0 : round($inserted / $total * 100, 2);
-
-            if (!empty($formatted)) {
-                $collection->batchInsert($formatted);
-            }
-
-            $this->writeln(sprintf('Nodes: Inserted %s/%s documents (%s%%).', str_pad($inserted, strlen($total), ' ', STR_PAD_LEFT), $total, $percentage));
-            $n++;
-            $count -= $limit;
+        foreach ($types as $type) {
+            $this->importContentTypeNodes($type, $limit);
         }
+
+        $this->outdent();
     }
-    
+
+    /**
+     * Imports content nodes of the specified type
+     */
+    abstract protected function importContentTypeNodes($type, $limit = 200);
+
+
+    protected function removeMeta(array $data)
+    {
+        if (isset($data['metatags'])) unset($data['metatags']);
+        foreach ($data as $key => $value) {
+            if (is_array($data[$key])) {
+                $data[$key] = $this->removeMeta($data[$key]);
+            }
+        }
+        return $data;
+    }
+
     // storage of legacy values pre-drush
-    public function convertLegacy(&$node) 
+    protected function convertLegacy(&$node)
     {
         $legacy = array();
         $legacy['id'] = (string) $node->nid;
         $legacy['source'] = sprintf('%s_node', $this->getKey());
-        
+
         $legacy['type'] = $node->type;
         $rawNode = json_decode(json_encode($node, 512), true);
+        $rawNode = $this->removeMeta($rawNode);
+
         $legacy['raw'] = $rawNode;
-        
+
         $node->legacy = $legacy;
     }
 }
