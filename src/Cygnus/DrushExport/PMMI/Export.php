@@ -199,12 +199,17 @@ abstract class Export extends AbstractExport
         $p = strtok($path, '.');
         while ($p !== false) {
             if (!isset($current[$p])) {
-            return $default;
+                if (stristr($path, '.en')) {
+                    // If we're looking up a languaged field that doesn't exist
+                    // try the non-languaged version before returning $default.
+                    return $this->resolveDotNotation($a, str_replace('.en', '.und', $path), $default);
+                }
+                return $default;
             }
-        $current = $current[$p];
-        $p = strtok('.');
+            $current = $current[$p];
+            $p = strtok('.');
         }
-    return $current;
+        return $current;
     }
 
     /**
